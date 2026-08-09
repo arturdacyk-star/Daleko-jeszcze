@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Daleko jeszcze?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky-top:#8ED0EE;
+    --sky-bottom:#E8F7FF;
+    --asphalt:#3A3F4B;
+    --asphalt-light:#4B5160;
+    --sun:#FFC93C;
+    --grass:#6FCF97;
+    --coral:#FF6B5B;
+    --ink:#24303D;
+    --paper:#FFFFFF;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    font-family:'Nunito', sans-serif;
+    background:linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 45%, var(--sky-bottom) 100%);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    overflow-x:hidden;
+  }
+  h1,h2{font-family:'Fredoka', sans-serif; margin:0;}
+
+  /* clouds */
+  .cloud{position:absolute; background:#fff; border-radius:50px; opacity:.85; filter:blur(0.5px);}
+  .cloud::before,.cloud::after{content:""; position:absolute; background:#fff; border-radius:50%;}
+  .c1{width:70px; height:26px; top:6%; left:8%;}
+  .c1::before{width:34px; height:34px; top:-16px; left:8px;}
+  .c1::after{width:26px; height:26px; top:-10px; left:38px;}
+  .c2{width:56px; height:20px; top:14%; right:10%;}
+  .c2::before{width:26px; height:26px; top:-12px; left:6px;}
+  .c2::after{width:20px; height:20px; top:-8px; left:30px;}
+
+  .screen{width:100%; max-width:480px; padding:20px; display:flex; flex-direction:column; align-items:center; position:relative; z-index:1;}
+  .hidden{display:none !important;}
+
+  /* --- SETUP SCREEN --- */
+  .badge{
+    background:var(--sun); color:var(--ink); font-family:'Fredoka';
+    padding:4px 14px; border-radius:20px; font-size:13px; font-weight:600;
+    margin-bottom:10px; box-shadow:0 2px 0 rgba(0,0,0,.08);
+  }
+  .title{font-size:34px; font-weight:700; text-align:center; line-height:1.15; margin-bottom:6px;}
+  .title span{color:var(--coral);}
+  .subtitle{text-align:center; font-size:15px; color:#4a5568; margin-bottom:22px; max-width:360px;}
+
+  .card{
+    background:var(--paper); border-radius:22px; padding:20px 18px;
+    width:100%; box-shadow:0 10px 30px rgba(36,48,61,.12);
+    margin-bottom:16px;
+  }
+  .card h2{font-size:17px; margin-bottom:4px;}
+  .card p.hint{font-size:13px; color:#6b7688; margin:4px 0 14px 0; line-height:1.5;}
+  label{display:block; font-size:12px; font-weight:700; color:#6b7688; text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px; margin-top:12px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], input[type=number]{
+    width:100%; padding:12px 14px; border-radius:12px; border:2px solid #E4E9F0;
+    font-size:16px; font-family:'Nunito'; font-weight:700; color:var(--ink);
+    background:#F7F9FC;
+  }
+  input:focus{outline:none; border-color:var(--sun);}
+
+  .primary-btn{
+    width:100%; padding:16px; border:none; border-radius:16px;
+    background:var(--coral); color:#fff; font-family:'Fredoka'; font-weight:600;
+    font-size:18px; cursor:pointer; box-shadow:0 6px 0 #d94a3c;
+    transition:transform .05s;
+  }
+  .primary-btn:active{transform:translateY(4px); box-shadow:0 2px 0 #d94a3c;}
+  .primary-btn:disabled{background:#C7CDD8; box-shadow:0 6px 0 #A9B1BF; cursor:not-allowed;}
+  .primary-btn:disabled:active{transform:none;}
+  .secondary-btn{
+    background:none; border:2px solid #D8DEE8; color:#6b7688; font-family:'Fredoka';
+    font-weight:600; border-radius:14px; padding:10px; font-size:14px; cursor:pointer; width:100%;
+  }
+  .status-msg{font-size:13px; text-align:center; margin-top:10px; min-height:18px; color:var(--asphalt);}
+  .status-msg.error{color:var(--coral); font-weight:700;}
+
+  .search-row{display:flex; gap:8px;}
+  .search-row input{flex:1;}
+  .search-btn{
+    flex-shrink:0; border:none; border-radius:12px; background:var(--asphalt); color:#fff;
+    font-family:'Fredoka'; font-weight:600; font-size:14px; padding:0 16px; cursor:pointer;
+  }
+  .search-btn:disabled{opacity:.5;}
+
+  .results-list{margin-top:12px; display:flex; flex-direction:column; gap:6px;}
+  .result-item{
+    text-align:left; width:100%; border:2px solid #E4E9F0; background:#F7F9FC;
+    border-radius:12px; padding:10px 12px; font-family:'Nunito'; font-size:13px;
+    color:var(--ink); cursor:pointer; line-height:1.4;
+  }
+  .result-item:active{background:#EFF3F8;}
+  .result-item b{display:block; font-family:'Fredoka'; font-size:14px; margin-bottom:1px;}
+
+  .dest-chip{
+    margin-top:12px; background:#EAFBF1; border:2px solid var(--grass); border-radius:12px;
+    padding:10px 12px; font-size:13px; display:flex; align-items:center; gap:8px;
+  }
+  .dest-chip .icon{font-size:18px;}
+  .dest-chip .txt{flex:1; line-height:1.35;}
+  .dest-chip b{display:block; font-family:'Fredoka'; font-size:14px;}
+  .dest-chip .clear{background:none; border:none; color:#6b7688; font-size:12px; text-decoration:underline; cursor:pointer; padding:4px;}
+
+  /* --- BOARD SCREEN --- */
+  .top-bar{width:100%; display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;}
+  .stat{background:var(--paper); border-radius:16px; padding:10px 16px; box-shadow:0 6px 16px rgba(36,48,61,.1); text-align:center; min-width:88px;}
+  .stat .num{font-family:'Fredoka'; font-size:22px; font-weight:700; color:var(--coral);}
+  .stat .lbl{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:#8a93a3; font-weight:700;}
+
+  .progress-outer{width:100%; background:#fff; border-radius:16px; padding:14px; box-shadow:0 6px 16px rgba(36,48,61,.1); margin-bottom:16px;}
+  .progress-bar-track{width:100%; height:14px; background:#E4E9F0; border-radius:10px; overflow:hidden;}
+  .progress-bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--grass), #57C77E); border-radius:10px; transition:width .6s ease;}
+  .progress-msg{text-align:center; font-family:'Fredoka'; font-weight:600; font-size:15px; margin-top:10px; color:var(--asphalt);}
+  .route-mode-note{text-align:center; font-size:11px; color:#8a93a3; margin-top:6px;}
+
+  .road-wrap{
+    width:100%; background:var(--asphalt); border-radius:20px; padding:14px;
+    box-shadow:0 10px 30px rgba(36,48,61,.25);
+  }
+  .road-row{display:flex; gap:4px; margin-bottom:4px;}
+  .road-row.rev{flex-direction:row-reverse;}
+  .tile{
+    flex:1; aspect-ratio:1/1; border-radius:6px; position:relative;
+    background:var(--asphalt-light);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .35s ease, transform .25s ease;
+  }
+  .tile::after{
+    content:""; width:60%; height:3px; background:#6a7385; border-radius:2px;
+  }
+  .tile.done{background:var(--grass);}
+  .tile.done::after{background:rgba(255,255,255,.55);}
+  .tile.start::after, .tile.finish::after{display:none;}
+  .tile.start{background:var(--sun);}
+  .tile.finish{background:var(--coral);}
+  .tile .mark{font-family:'Fredoka'; font-weight:700; font-size:9px; color:#fff;}
+  .tile.current{transform:scale(1.18); z-index:2; box-shadow:0 0 0 3px #fff, 0 4px 10px rgba(0,0,0,.3);}
+  .tile.current .car{font-size:15px; line-height:1;}
+
+  .bottom-actions{width:100%; margin-top:18px;}
+
+  footer.note{font-size:11px; color:#5a6478; text-align:center; margin:18px 0 6px 0; line-height:1.6; opacity:.8;}
+
+  @media (prefers-reduced-motion: reduce){
+    .progress-bar-fill, .tile{transition:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="cloud c1"></div>
+<div class="cloud c2"></div>
+
+<!-- SETUP SCREEN -->
+<div class="screen" id="setupScreen">
+  <div class="badge">🚗 GRA W PODRÓŻ</div>
+  <div class="title">Daleko <span>jeszcze?</span></div>
+  <div class="subtitle">Ustaw cel podróży, a droga zamieni się w planszę — pole po polu, aż dojedziecie.</div>
+
+  <div class="card">
+    <h2>🎯 Dokąd jedziemy?</h2>
+    <p class="hint">Wpisz adres, miejscowość albo nazwę miejsca — tak jak w Mapach Google.</p>
+    <label for="destAddress">Adres celu</label>
+    <div class="search-row">
+      <input type="text" id="destAddress" placeholder="np. Zakopane, Krupówki 10">
+      <button class="search-btn" id="searchBtn">Szukaj</button>
+    </div>
+    <div class="results-list hidden" id="resultsList"></div>
+    <div class="dest-chip hidden" id="destChip">
+      <div class="icon">📍</div>
+      <div class="txt"><b id="destChipName"></b><span id="destChipAddr"></span></div>
+      <button class="clear" id="destClearBtn">zmień</button>
+    </div>
+  </div>
+
+  <button class="primary-btn" id="startBtn" disabled>Ustal start i jedziemy! 🚦</button>
+  <div class="status-msg" id="setupStatus"></div>
+
+  <footer class="note">
+    Aplikacja użyje Twojej obecnej pozycji GPS jako punktu startowego i będzie liczyć odległość w linii prostej do celu — to prototyp, nie zna jeszcze przebiegu dróg.
+  </footer>
+</div>
+
+<!-- BOARD SCREEN -->
+<div class="screen hidden" id="boardScreen">
+  <div class="top-bar">
+    <div class="stat">
+      <div class="num" id="statPercent">0%</div>
+      <div class="lbl">trasy</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="statKm">–</div>
+      <div class="lbl">km zostało</div>
+    </div>
+  </div>
+
+  <div class="progress-outer">
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-msg" id="progressMsg">Jedziemy! 🚗💨</div>
+    <div class="route-mode-note" id="routeModeNote"></div>
+  </div>
+
+  <div class="road-wrap" id="roadWrap"></div>
+
+  <div class="bottom-actions">
+    <button class="secondary-btn" id="resetBtn">🔄 Nowa podróż</button>
+  </div>
+  <div class="status-msg" id="boardStatus"></div>
+
+  <footer class="note">Prototyp PWA · pozycja odświeżana co kilka sekund</footer>
+</div>
+
+<script>
+const TILE_COUNT = 100;
+let destLat, destLng, destName;
+let startLat, startLng, totalDistance;
+let routePoints = null;   // [[lat,lng], ...] along the real road route
+let routeCumDist = null;  // cumulative km matching routePoints
+let usingRoute = false;
+let maxProgress = 0;
+let watchId = null;
+let lastUpdateTs = 0;
+
+const $ = id => document.getElementById(id);
+
+function haversine(lat1, lon1, lat2, lon2){
+  const R = 6371; // km
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function fetchRoute(sLat, sLng, dLat, dLng){
+  const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('OSRM HTTP ' + res.status);
+  const data = await res.json();
+  if(!data.routes || data.routes.length === 0) throw new Error('brak trasy drogowej');
+  const route = data.routes[0];
+  const points = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lng,lat] -> [lat,lng]
+  const cum = [0];
+  for(let i = 1; i < points.length; i++){
+    cum.push(cum[i-1] + haversine(points[i-1][0], points[i-1][1], points[i][0], points[i][1]));
+  }
+  return {points, cum, totalKm: route.distance / 1000};
+}
+
+// build the snake road: 10 rows x 10 cols, alternating direction
+function buildRoad(){
+  const wrap = $('roadWrap');
+  wrap.innerHTML = '';
+  let tileIndex = 0;
+  for(let row = 0; row < 10; row++){
+    const rowEl = document.createElement('div');
+    rowEl.className = 'road-row' + (row % 2 === 1 ? ' rev' : '');
+    for(let col = 0; col < 10; col++){
+      tileIndex++;
+      const t = document.createElement('div');
+      t.className = 'tile';
+      t.id = 'tile-' + tileIndex;
+      if(tileIndex === 1) t.classList.add('start');
+      if(tileIndex === TILE_COUNT) t.classList.add('finish');
+      rowEl.appendChild(t);
+    }
+    wrap.appendChild(rowEl);
+  }
+}
+
+function renderProgress(fraction){
+  fraction = Math.max(0, Math.min(1, fraction));
+  const filledTiles = Math.floor(fraction * TILE_COUNT);
+  const currentTile = Math.min(TILE_COUNT, filledTiles + 1);
+
+  for(let i = 1; i <= TILE_COUNT; i++){
+    const el = $('tile-' + i);
+    if(!el) continue;
+    el.classList.remove('current');
+    el.querySelector('.car')?.remove();
+    if(i <= filledTiles){
+      el.classList.add('done');
+    } else {
+      el.classList.remove('done');
+    }
+  }
+  if(fraction < 1){
+    const cur = $('tile-' + currentTile);
+    if(cur){
+      cur.classList.add('current');
+      const car = document.createElement('span');
+      car.className = 'car';
+      car.textContent = '🚗';
+      cur.appendChild(car);
+    }
+  }
+
+  $('progressFill').style.width = (fraction*100) + '%';
+  $('statPercent').textContent = Math.round(fraction*100) + '%';
+
+  const remainingKm = totalDistance * (1 - fraction);
+  $('statKm').textContent = remainingKm < 10 ? remainingKm.toFixed(1) : Math.round(remainingKm);
+
+  const msgEl = $('progressMsg');
+  if(fraction >= 1){
+    msgEl.textContent = '🎉 Dojechaliśmy' + (destName ? ' do: ' + destName : '') + '!';
+  } else if(fraction >= 0.9){
+    msgEl.textContent = 'Prawie na miejscu! 🏁';
+  } else if(fraction >= 0.5){
+    msgEl.textContent = 'Ponad połowa za nami! 💪';
+  } else if(fraction >= 0.1){
+    msgEl.textContent = 'Jedziemy! 🚗💨';
+  } else {
+    msgEl.textContent = 'Dopiero ruszyliśmy 🛫';
+  }
+}
+
+// finds the nearest point on the fetched route and returns cumulative
+// distance travelled along the route up to that point (km)
+function distanceAlongRoute(lat, lng){
+  let minDist = Infinity, minIdx = 0;
+  for(let i = 0; i < routePoints.length; i++){
+    const d = haversine(lat, lng, routePoints[i][0], routePoints[i][1]);
+    if(d < minDist){ minDist = d; minIdx = i; }
+  }
+  return routeCumDist[minIdx];
+}
+
+function handlePosition(pos){
+  const {latitude, longitude} = pos.coords;
+  let distTraveled;
+  if(usingRoute && routePoints){
+    distTraveled = distanceAlongRoute(latitude, longitude);
+  } else {
+    const distRemaining = haversine(latitude, longitude, destLat, destLng);
+    distTraveled = totalDistance - distRemaining;
+  }
+  let fraction = distTraveled / totalDistance;
+  fraction = Math.max(0, Math.min(1, fraction));
+
+  // only move forward — smooths out GPS jitter so the board never "un-fills"
+  if(fraction > maxProgress){
+    maxProgress = fraction;
+    renderProgress(maxProgress);
+  }
+  $('boardStatus').textContent = '';
+  lastUpdateTs = Date.now();
+}
+
+function handlePositionError(err){
+  $('boardStatus').textContent = 'Nie można odczytać GPS: ' + err.message;
+  $('boardStatus').classList.add('error');
+}
+
+function startTracking(){
+  if(!navigator.geolocation){
+    $('boardStatus').textContent = 'Ta przeglądarka nie obsługuje GPS.';
+    return;
+  }
+  watchId = navigator.geolocation.watchPosition(handlePosition, handlePositionError, {
+    enableHighAccuracy: true,
+    maximumAge: 4000,
+    timeout: 15000
+  });
+}
+
+function stopTracking(){
+  if(watchId !== null){
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+
+async function geocodeNominatim(query){
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&accept-language=pl&q=' + encodeURIComponent(query);
+  const res = await fetch(url, {headers: {'Accept': 'application/json'}});
+  if(!res.ok) throw new Error('Nominatim HTTP ' + res.status);
+  const data = await res.json();
+  return data.map(r => ({
+    lat: r.lat, lon: r.lon,
+    shortName: r.display_name.split(',')[0],
+    fullName: r.display_name
+  }));
+}
+
+async function geocodePhoton(query){
+  const url = 'https://photon.komoot.io/api/?limit=5&lang=pl&q=' + encodeURIComponent(query);
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Photon HTTP ' + res.status);
+  const data = await res.json();
+  return (data.features || []).map(f => {
+    const p = f.properties;
+    const parts = [p.name, p.street, p.city, p.state, p.country].filter(Boolean);
+    return {
+      lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+      shortName: p.name || p.city || query,
+      fullName: parts.join(', ')
+    };
+  });
+}
+
+async function geocodeAddress(query){
+  try{
+    const r = await geocodeNominatim(query);
+    if(r.length > 0) return r;
+    throw new Error('brak wyników w Nominatim');
+  } catch(errA){
+    try{
+      return await geocodePhoton(query);
+    } catch(errB){
+      throw new Error(errA.message + ' / ' + errB.message);
+    }
+  }
+}
+
+function renderResults(results){
+  const list = $('resultsList');
+  list.innerHTML = '';
+  if(results.length === 0){
+    list.classList.add('hidden');
+    $('setupStatus').textContent = 'Nic nie znaleziono — spróbuj dokładniejszego adresu.';
+    $('setupStatus').classList.add('error');
+    return;
+  }
+  results.forEach(r => {
+    const btn = document.createElement('button');
+    btn.className = 'result-item';
+    btn.innerHTML = '<b>' + r.shortName + '</b>' + r.fullName;
+    btn.addEventListener('click', () => selectDestination(r));
+    list.appendChild(btn);
+  });
+  list.classList.remove('hidden');
+}
+
+function selectDestination(r){
+  destLat = parseFloat(r.lat);
+  destLng = parseFloat(r.lon);
+  destName = r.shortName;
+
+  $('resultsList').classList.add('hidden');
+  $('resultsList').innerHTML = '';
+  $('destAddress').value = '';
+  $('destChipName').textContent = r.shortName;
+  $('destChipAddr').textContent = r.fullName;
+  $('destChip').classList.remove('hidden');
+  $('startBtn').disabled = false;
+  $('setupStatus').textContent = '';
+  $('setupStatus').classList.remove('error');
+}
+
+$('destClearBtn').addEventListener('click', () => {
+  destLat = destLng = destName = undefined;
+  $('destChip').classList.add('hidden');
+  $('startBtn').disabled = true;
+});
+
+$('searchBtn').addEventListener('click', async () => {
+  const query = $('destAddress').value.trim();
+  const statusEl = $('setupStatus');
+  statusEl.classList.remove('error');
+  if(!query){
+    statusEl.textContent = 'Wpisz adres celu.';
+    statusEl.classList.add('error');
+    return;
+  }
+  $('searchBtn').disabled = true;
+  statusEl.textContent = 'Szukam…';
+  try{
+    const results = await geocodeAddress(query);
+    statusEl.textContent = '';
+    renderResults(results);
+  } catch(e){
+    statusEl.textContent = 'Błąd wyszukiwania (' + e.message + '). Sprawdź internet i spróbuj ponownie.';
+    statusEl.classList.add('error');
+  } finally {
+    $('searchBtn').disabled = false;
+  }
+});
+
+$('destAddress').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); $('searchBtn').click(); }
+});
+
+$('startBtn').addEventListener('click', () => {
+  const statusEl = $('setupStatus');
+  statusEl.classList.remove('error');
+
+  if(destLat === undefined || destLng === undefined){
+    statusEl.textContent = 'Najpierw wybierz cel z listy.';
+    statusEl.classList.add('error');
+    return;
+  }
+
+  statusEl.textContent = 'Namierzam Waszą pozycję startową…';
+
+  navigator.geolocation.getCurrentPosition(async pos => {
+    startLat = pos.coords.latitude;
+    startLng = pos.coords.longitude;
+
+    statusEl.textContent = 'Liczę trasę po drogach…';
+    routePoints = null;
+    routeCumDist = null;
+    usingRoute = false;
+
+    try{
+      const route = await fetchRoute(startLat, startLng, destLat, destLng);
+      routePoints = route.points;
+      routeCumDist = route.cum;
+      totalDistance = route.totalKm;
+      usingRoute = true;
+    } catch(e){
+      totalDistance = haversine(startLat, startLng, destLat, destLng);
+      usingRoute = false;
+    }
+
+    if(totalDistance < 0.05){
+      statusEl.textContent = 'Już tam jesteście! Podaj cel dalej od startu.';
+      statusEl.classList.add('error');
+      return;
+    }
+
+    maxProgress = 0;
+    buildRoad();
+    renderProgress(0);
+    $('routeModeNote').textContent = usingRoute
+      ? '🛣️ dystans liczony po realnej trasie drogowej'
+      : '📏 dystans liczony w linii prostej (serwis tras chwilowo niedostępny)';
+    $('setupScreen').classList.add('hidden');
+    $('boardScreen').classList.remove('hidden');
+    startTracking();
+  }, err => {
+    statusEl.textContent = 'Nie można odczytać GPS: ' + err.message + '. Sprawdź zgodę na lokalizację.';
+    statusEl.classList.add('error');
+  }, {enableHighAccuracy:true, timeout:15000});
+});
+
+$('resetBtn').addEventListener('click', () => {
+  stopTracking();
+  destLat = destLng = destName = undefined;
+  routePoints = null;
+  routeCumDist = null;
+  usingRoute = false;
+  $('destChip').classList.add('hidden');
+  $('destAddress').value = '';
+  $('resultsList').classList.add('hidden');
+  $('resultsList').innerHTML = '';
+  $('startBtn').disabled = true;
+  $('boardScreen').classList.add('hidden');
+  $('setupScreen').classList.remove('hidden');
+  $('setupStatus').textContent = '';
+  $('boardStatus').textContent = '';
+});
+</script>
+</body>
+</html>
