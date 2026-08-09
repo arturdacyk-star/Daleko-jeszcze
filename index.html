@@ -123,6 +123,7 @@
   .progress-bar-track{width:100%; height:14px; background:#E4E9F0; border-radius:10px; overflow:hidden;}
   .progress-bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--grass), #57C77E); border-radius:10px; transition:width .6s ease;}
   .progress-msg{text-align:center; font-family:'Fredoka'; font-weight:600; font-size:15px; margin-top:10px; color:var(--asphalt);}
+  .route-mode-note{text-align:center; font-size:11px; color:#8a93a3; margin-top:6px;}
 
   .road-wrap{
     width:100%; background:var(--asphalt); border-radius:20px; padding:14px;
@@ -208,6 +209,7 @@
   <div class="progress-outer">
     <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
     <div class="progress-msg" id="progressMsg">Jedziemy! 🚗💨</div>
+    <div class="route-mode-note" id="routeModeNote"></div>
   </div>
 
   <div class="road-wrap" id="roadWrap"></div>
@@ -224,6 +226,9 @@
 const TILE_COUNT = 100;
 let destLat, destLng, destName;
 let startLat, startLng, totalDistance;
+let routePoints = null;   // [[lat,lng], ...] along the real road route
+let routeCumDist = null;  // cumulative km matching routePoints
+let usingRoute = false;
 let maxProgress = 0;
 let watchId = null;
 let lastUpdateTs = 0;
@@ -237,6 +242,21 @@ function haversine(lat1, lon1, lat2, lon2){
   const dLon = toRad(lon2-lon1);
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function fetchRoute(sLat, sLng, dLat, dLng){
+  const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('OSRM HTTP ' + res.status);
+  const data = await res.json();
+  if(!data.routes || data.routes.length === 0) throw new Error('brak trasy drogowej');
+  const route = data.routes[0];
+  const points = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lng,lat] -> [lat,lng]
+  const cum = [0];
+  for(let i = 1; i < points.length; i++){
+    cum.push(cum[i-1] + haversine(points[i-1][0], points[i-1][1], points[i][0], points[i][1]));
+  }
+  return {points, cum, totalKm: route.distance / 1000};
 }
 
 // build the snake road: 10 rows x 10 cols, alternating direction
@@ -307,10 +327,27 @@ function renderProgress(fraction){
   }
 }
 
+// finds the nearest point on the fetched route and returns cumulative
+// distance travelled along the route up to that point (km)
+function distanceAlongRoute(lat, lng){
+  let minDist = Infinity, minIdx = 0;
+  for(let i = 0; i < routePoints.length; i++){
+    const d = haversine(lat, lng, routePoints[i][0], routePoints[i][1]);
+    if(d < minDist){ minDist = d; minIdx = i; }
+  }
+  return routeCumDist[minIdx];
+}
+
 function handlePosition(pos){
   const {latitude, longitude} = pos.coords;
-  const distRemaining = haversine(latitude, longitude, destLat, destLng);
-  let fraction = 1 - (distRemaining / totalDistance);
+  let distTraveled;
+  if(usingRoute && routePoints){
+    distTraveled = distanceAlongRoute(latitude, longitude);
+  } else {
+    const distRemaining = haversine(latitude, longitude, destLat, destLng);
+    distTraveled = totalDistance - distRemaining;
+  }
+  let fraction = distTraveled / totalDistance;
   fraction = Math.max(0, Math.min(1, fraction));
 
   // only move forward — smooths out GPS jitter so the board never "un-fills"
@@ -468,10 +505,25 @@ $('startBtn').addEventListener('click', () => {
 
   statusEl.textContent = 'Namierzam Waszą pozycję startową…';
 
-  navigator.geolocation.getCurrentPosition(pos => {
+  navigator.geolocation.getCurrentPosition(async pos => {
     startLat = pos.coords.latitude;
     startLng = pos.coords.longitude;
-    totalDistance = haversine(startLat, startLng, destLat, destLng);
+
+    statusEl.textContent = 'Liczę trasę po drogach…';
+    routePoints = null;
+    routeCumDist = null;
+    usingRoute = false;
+
+    try{
+      const route = await fetchRoute(startLat, startLng, destLat, destLng);
+      routePoints = route.points;
+      routeCumDist = route.cum;
+      totalDistance = route.totalKm;
+      usingRoute = true;
+    } catch(e){
+      totalDistance = haversine(startLat, startLng, destLat, destLng);
+      usingRoute = false;
+    }
 
     if(totalDistance < 0.05){
       statusEl.textContent = 'Już tam jesteście! Podaj cel dalej od startu.';
@@ -482,6 +534,9 @@ $('startBtn').addEventListener('click', () => {
     maxProgress = 0;
     buildRoad();
     renderProgress(0);
+    $('routeModeNote').textContent = usingRoute
+      ? '🛣️ dystans liczony po realnej trasie drogowej'
+      : '📏 dystans liczony w linii prostej (serwis tras chwilowo niedostępny)';
     $('setupScreen').classList.add('hidden');
     $('boardScreen').classList.remove('hidden');
     startTracking();
@@ -494,6 +549,9 @@ $('startBtn').addEventListener('click', () => {
 $('resetBtn').addEventListener('click', () => {
   stopTracking();
   destLat = destLng = destName = undefined;
+  routePoints = null;
+  routeCumDist = null;
+  usingRoute = false;
   $('destChip').classList.add('hidden');
   $('destAddress').value = '';
   $('resultsList').classList.add('hidden');
