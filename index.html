@@ -224,8 +224,9 @@
 
   .row-deco{
     align-self:center; justify-self:center; opacity:.45; line-height:1;
-    pointer-events:none;
+    pointer-events:none; animation:decoSway 4s ease-in-out infinite;
   }
+  @keyframes decoSway{0%,100%{transform:translateX(-4px);}50%{transform:translateX(4px);}}
 
   .tile-path{
     position:absolute; border-radius:50%; background:var(--asphalt-light);
@@ -812,6 +813,7 @@ function buildGridTiles(wrap, theme, count){
         deco.style.fontSize = decoSize + 'px';
         deco.style.gridColumn = decorCol;
         deco.style.gridRow = (r*2 + 2);
+        deco.style.animationDelay = (r * 0.3) + 's';
         wrap.appendChild(deco);
       }
     }
@@ -880,6 +882,28 @@ function buildPathTiles(wrap, theme, count){
     if(i === count-1) tl.classList.add('finish');
     wrap.appendChild(tl);
   });
+
+  // themed decorations spread along the path, offset to the side so they
+  // don't collide with the tiles or the connecting line
+  if(theme.decor && theme.decor.length){
+    const decorCount = clamp(Math.round(count / 25), 3, 10);
+    const decorSize = Math.max(10, Math.min(20, Math.floor(size * 1.1)));
+    const offset = size * 1.6 + 6;
+    for(let k = 0; k < decorCount; k++){
+      const idx = Math.min(count - 1, Math.floor((k + 0.5) * (count - 1) / decorCount));
+      const c = centers[idx];
+      const side = k % 2 === 0 ? 1 : -1;
+      const deco = document.createElement('span');
+      deco.className = 'row-deco';
+      deco.style.position = 'absolute';
+      deco.style.left = clamp(c[0] + side * offset, decorSize * 0.6, W - decorSize * 0.6) + 'px';
+      deco.style.top = (c[1] - decorSize/2) + 'px';
+      deco.style.fontSize = decorSize + 'px';
+      deco.style.animationDelay = (k * 0.35) + 's';
+      deco.textContent = theme.decor[k % theme.decor.length].e;
+      wrap.appendChild(deco);
+    }
+  }
 }
 
 function buildDecor(theme){
