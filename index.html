@@ -222,10 +222,6 @@
   .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
 
-  .row-link{
-    align-self:center; justify-self:center; width:55%; height:82%;
-    background:var(--asphalt-light); border-radius:40%;
-  }
   .row-deco{
     align-self:center; justify-self:center; opacity:.45; line-height:1;
     pointer-events:none;
@@ -351,8 +347,8 @@
     <h2 id="tileCardTitle">🔢 Liczba pól trasy</h2>
     <p class="hint" id="tileCardHint">Od 10 (krótka gra) do 1000 (długa trasa). Domyślnie 100.</p>
     <div class="tile-count-row">
-      <input type="range" id="tileCountRange" min="10" max="1000" step="10" value="100">
-      <input type="number" id="tileCountNum" class="tile-count-num" min="10" max="1000" value="100">
+      <input type="range" id="tileCountRange" min="10" max="300" step="10" value="100">
+      <input type="number" id="tileCountNum" class="tile-count-num" min="10" max="300" value="100">
     </div>
     <div class="tile-count-hint" id="tileCountHint2">Duża liczba pól = mniejsze pola, żeby wszystko zmieściło się na ekranie.</div>
   </div>
@@ -762,22 +758,23 @@ function applyThemeVars(theme){
 function buildGridTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-grid';
   wrap.style.display = 'grid';
-  const W = wrap.clientWidth, H = wrap.clientHeight;
-  const aspect = (W / Math.max(H,1)) * (theme.gridAspectBias || 1);
-  let cols = Math.max(3, Math.round(Math.sqrt(count * aspect)));
+  // square-ish arrangement (cols ≈ rows) reads much better than one driven
+  // by the container's own aspect ratio; theme bias still gives forest its
+  // narrower switchback character
+  let cols = Math.max(3, Math.round(Math.sqrt(count * (theme.gridAspectBias || 1))));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
-  const colGap = count > 300 ? 1 : count > 120 ? 2 : 4;
+  const colGap = count > 200 ? 1 : count > 80 ? 2 : 4;
   wrap.style.rowGap = '0px';
   wrap.style.columnGap = colGap + 'px';
   wrap.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-  // interleave a thin "connector" row between every pair of tile rows —
-  // this is where the road visually turns, instead of a flat table grid
+  // interleave a full-size "turn" row between every pair of tile rows —
+  // this is where the road visually bends, instead of a flat table grid
   const rowTemplate = [];
   for(let r = 0; r < rows; r++){
     rowTemplate.push('1fr');
-    if(r < rows - 1) rowTemplate.push('0.42fr');
+    if(r < rows - 1) rowTemplate.push('1fr');
   }
   wrap.style.gridTemplateRows = rowTemplate.join(' ');
 
@@ -795,13 +792,13 @@ function buildGridTiles(wrap, theme, count){
     wrap.appendChild(tl);
   }
 
-  // one connector piece bridging every row turn (continuity), plus a light
-  // decorative touch elsewhere in that row's gap
+  // one full-size turn tile bridging every row change (continuity), plus a
+  // light decorative touch elsewhere in that row
   const decoSize = Math.max(9, Math.min(18, Math.floor(140 / Math.sqrt(count))));
   for(let r = 0; r < rows - 1; r++){
     const turnCol = (r % 2 === 0) ? cols : 1;
     const link = document.createElement('div');
-    link.className = 'row-link';
+    link.className = 'tile turn';
     link.style.gridColumn = turnCol;
     link.style.gridRow = (r*2 + 2);
     wrap.appendChild(link);
@@ -825,7 +822,10 @@ function buildPathTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-path';
   wrap.style.display = 'block';
   const W = wrap.clientWidth, H = wrap.clientHeight;
-  const size = Math.max(5, Math.min(30, Math.floor(Math.min(W / 8, H / (count/6 || 1)))));
+  // tile size must stay below the vertical spacing between consecutive
+  // points along the path, or dots start to overlap at higher counts
+  const vStep = H / Math.max(1, count - 1);
+  const size = Math.max(5, Math.min(30, Math.floor(Math.min(W / 8, vStep * 0.8))));
   const usableH = Math.max(1, H - size);
   const usableW = Math.max(1, W - size);
 
@@ -928,7 +928,8 @@ function renderProgress(fraction){
   const count = settings.tileCount;
   const filledTiles = Math.floor(fraction * count);
   const currentTile = Math.min(count, filledTiles + 1);
-  const carSize = Math.max(9, Math.min(16, Math.floor(160 / Math.sqrt(count))));
+  const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
+  const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
 
   for(let i = 1; i <= count; i++){
     const el = $('tile-' + i);
@@ -1485,7 +1486,7 @@ $('tileCountRange').addEventListener('input', () => {
 $('tileCountNum').addEventListener('change', () => {
   let v = parseInt($('tileCountNum').value, 10);
   if(isNaN(v)) v = 100;
-  v = Math.max(10, Math.min(1000, v));
+  v = Math.max(10, Math.min(300, v));
   settings.tileCount = v;
   $('tileCountNum').value = v;
   $('tileCountRange').value = v;
