@@ -123,6 +123,7 @@
   }
   .result-item:active{background:#EFF3F8;}
   .result-item b{display:block; font-family:'Baloo 2'; font-size:14px; margin-bottom:1px;}
+  .result-history-label{font-size:11px; color:#8a93a3; font-weight:700; margin:2px 2px 4px; text-transform:uppercase; letter-spacing:.03em;}
 
   .dest-chip, .start-current-row{
     background:#EAFBF1; border:2px solid var(--grass); border-radius:12px;
@@ -161,7 +162,7 @@
   .theme-card.selected{border-color:var(--coral); background:#FFF1EF;}
   .theme-card .em{font-size:28px; display:block; margin-bottom:4px;}
   .theme-card .lb{font-family:'Baloo 2'; font-weight:600; font-size:13px;}
-  .theme-card .shape{font-size:10px; color:#8a93a3; margin-top:2px;}
+  .theme-card .shape{font-size:10px; color:#8a93a3; margin-top:2px; display:block;}
 
   .tile-count-row{display:flex; align-items:center; gap:10px; margin-top:6px;}
   input[type=range]{flex:1; accent-color:var(--coral); height:6px;}
@@ -203,6 +204,15 @@
   .progress-bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--grass), #57C77E); border-radius:10px; transition:width .6s ease;}
   .progress-msg-row{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px;}
   .progress-msg{font-family:'Baloo 2'; font-weight:600; font-size:13px; color:var(--asphalt);}
+  .arrival-banner{
+    display:none; align-items:center; justify-content:center; gap:10px;
+    margin-top:8px; padding:10px 14px; border-radius:14px;
+    background:linear-gradient(135deg,#1a1a1a,#333); color:#fff;
+    font-family:'Baloo 2'; font-weight:700; font-size:16px; text-align:center;
+  }
+  .arrival-banner.show{display:flex;}
+  .arrival-banner .flag{display:inline-block; font-size:26px; animation:flagWave 0.6s ease-in-out infinite alternate;}
+  @keyframes flagWave{0%{transform:rotate(-8deg);}100%{transform:rotate(10deg);}}
   .route-mode-icon{font-size:15px; line-height:1;}
 
   .road-wrap{
@@ -218,7 +228,7 @@
   }
   .tile.done{background:var(--grass);}
   .tile.start{background:var(--sun);}
-  .tile.finish{background:var(--finish);}
+  .tile.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
   .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
 
@@ -235,7 +245,7 @@
   }
   .tile-path.done{background:var(--grass);}
   .tile-path.start{background:var(--sun);}
-  .tile-path.finish{background:var(--finish);}
+  .tile-path.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
   .tile-path.current{transform:scale(1.4) !important; z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile-path .car{line-height:1;}
 
@@ -391,6 +401,9 @@
         <div class="progress-msg" id="progressMsg">Jedziemy!</div>
         <span class="route-mode-icon" id="routeModeIcon" title=""></span>
       </div>
+      <div class="arrival-banner" id="arrivalBanner">
+        <span class="flag">🏁</span><span id="arrivalBannerText"></span><span class="flag">🏁</span>
+      </div>
     </div>
 
     <div class="road-wrap" id="roadWrap"></div>
@@ -464,6 +477,7 @@ const I18N = {
     resumeContinue:'Kontynuuj',
     resumeNew:'Zacznij nową',
     resumeToPrefix:'do', resumeDonePct:'ukończono',
+    recentLabel:'Ostatnio wybierane',
     themes:{
       road:{label:'Droga', shape:'siatka wężowa'},
       forest:{label:'Las', shape:'wąska serpentyna'},
@@ -530,6 +544,7 @@ const I18N = {
     resumeContinue:'Continue',
     resumeNew:'Start new',
     resumeToPrefix:'to', resumeDonePct:'complete',
+    recentLabel:'Recently selected',
     themes:{
       road:{label:'Road', shape:'snake grid'},
       forest:{label:'Forest', shape:'narrow switchback'},
@@ -562,7 +577,13 @@ const THEME_STYLE = {
     decor:[{e:'🌋',a:'bob'},{e:'🌿',a:'sway'},{e:'🦴',a:'bob'},{e:'🌿',a:'sway'}] }
 };
 
-let settings = { theme:'road', tileCount:100, forceStraightLine:false, lang:'pl' };
+function detectDefaultLang(){
+  try{
+    const langs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || ''];
+    return langs.some(l => l.toLowerCase().startsWith('pl')) ? 'pl' : 'en';
+  } catch(e){ return 'en'; }
+}
+let settings = { theme:'road', tileCount:100, forceStraightLine:false, lang: detectDefaultLang() };
 
 function t(key){ return I18N[settings.lang][key]; }
 function themeInfo(id){ return { ...THEME_STYLE[id], ...I18N[settings.lang].themes[id] }; }
@@ -582,6 +603,41 @@ let wakeLock = null;
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'dalekoJeszcze_trip_v1';
+const HISTORY_KEY = 'dalekoJeszcze_destHistory_v1';
+
+function loadDestHistory(){
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e){ return []; }
+}
+function addToDestHistory(r){
+  try{
+    let list = loadDestHistory().filter(h => h.fullName !== r.fullName);
+    list.unshift({ shortName: r.shortName, fullName: r.fullName, lat: r.lat, lon: r.lon });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 6)));
+  } catch(e){}
+}
+function showDestHistory(){
+  const list = loadDestHistory();
+  const listEl = $('resultsList');
+  if(list.length === 0) return;
+  listEl.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'result-history-label';
+  label.textContent = t('recentLabel');
+  listEl.appendChild(label);
+  list.forEach(r => {
+    const btn = document.createElement('button');
+    btn.className = 'result-item';
+    btn.innerHTML = '<b>🕘 ' + r.shortName + '</b>' + r.fullName;
+    btn.addEventListener('click', () => selectDestination(r));
+    listEl.appendChild(btn);
+  });
+  listEl.classList.remove('hidden');
+  $('setupStatus').textContent = '';
+  $('setupStatus').classList.remove('error');
+}
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 /* ---------- API LAYER ----------
@@ -886,7 +942,7 @@ function buildPathTiles(wrap, theme, count){
   // themed decorations spread along the path, offset to the side so they
   // don't collide with the tiles or the connecting line
   if(theme.decor && theme.decor.length){
-    const decorCount = clamp(Math.round(count / 25), 3, 10);
+    const decorCount = clamp(Math.round(count / 25) * 3, 9, 30);
     const decorSize = Math.max(10, Math.min(20, Math.floor(size * 1.1)));
     const offset = size * 1.6 + 6;
     for(let k = 0; k < decorCount; k++){
@@ -982,16 +1038,23 @@ function renderProgress(fraction){
   $('statKm').textContent = remainingKm < 10 ? remainingKm.toFixed(1) : Math.round(remainingKm);
 
   const msgEl = $('progressMsg');
+  const arrivalEl = $('arrivalBanner');
   if(fraction >= 1){
     msgEl.textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
+    $('arrivalBannerText').textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
+    arrivalEl.classList.add('show');
   } else if(fraction >= 0.9){
     msgEl.textContent = t('msgAlmost') + ' ' + theme.finishIcon;
+    arrivalEl.classList.remove('show');
   } else if(fraction >= 0.5){
     msgEl.textContent = t('msgHalf');
+    arrivalEl.classList.remove('show');
   } else if(fraction >= 0.1){
     msgEl.textContent = t('msgGo') + ' ' + theme.vehicle;
+    arrivalEl.classList.remove('show');
   } else {
     msgEl.textContent = t('msgStart') + ' ' + theme.startIcon;
+    arrivalEl.classList.remove('show');
   }
 }
 
@@ -1093,6 +1156,16 @@ function acceptProgressFromGps(pos){
     fraction = (totalDistance - remaining) / totalDistance;
   }
   fraction = clamp(fraction, 0, 1);
+
+  // don't let a single noisy fix near the end declare arrival — only accept
+  // fraction===1 once we're also physically close to the destination point
+  if(fraction >= 0.98){
+    const directDist = haversine(lat, lng, destLat, destLng);
+    const arrivalThreshold = Math.max(0.05, (accuracy || 30) / 1000 * 2);
+    if(directDist > arrivalThreshold){
+      fraction = Math.min(fraction, 0.98);
+    }
+  }
 
   // reject GPS jumps that are physically implausible in the elapsed time,
   // unless the same jump repeats (then it's probably real, e.g. a tunnel exit)
@@ -1210,6 +1283,7 @@ function selectDestination(r){
   destLat = parseFloat(r.lat);
   destLng = parseFloat(r.lon);
   destName = r.shortName;
+  addToDestHistory(r);
   $('resultsList').classList.add('hidden');
   $('resultsList').innerHTML = '';
   $('destAddress').value = '';
@@ -1243,6 +1317,13 @@ $('searchBtn').addEventListener('click', async () => {
   } finally { $('searchBtn').disabled = false; }
 });
 $('destAddress').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); $('searchBtn').click(); } });
+$('destAddress').addEventListener('focus', () => {
+  if(!$('destAddress').value.trim()) showDestHistory();
+});
+$('destAddress').addEventListener('input', () => {
+  if(!$('destAddress').value.trim()) showDestHistory();
+  else { $('resultsList').classList.add('hidden'); $('resultsList').innerHTML = ''; }
+});
 
 /* ---- start point (defaults to GPS, like Google Maps) ---- */
 function selectStartPoint(r){
@@ -1522,6 +1603,7 @@ $('forceStraightToggle').addEventListener('change', () => {
 });
 
 applyStaticTexts();
+document.documentElement.lang = settings.lang;
 checkForSavedTrip();
 </script>
 </body>
