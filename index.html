@@ -222,6 +222,15 @@
   .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
 
+  .row-link{
+    align-self:center; justify-self:center; width:55%; height:82%;
+    background:var(--asphalt-light); border-radius:40%;
+  }
+  .row-deco{
+    align-self:center; justify-self:center; opacity:.45; line-height:1;
+    pointer-events:none;
+  }
+
   .tile-path{
     position:absolute; border-radius:50%; background:var(--asphalt-light);
     transition:background .3s ease, transform .2s ease;
@@ -758,10 +767,19 @@ function buildGridTiles(wrap, theme, count){
   let cols = Math.max(3, Math.round(Math.sqrt(count * aspect)));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
-  const gap = count > 300 ? 1 : count > 120 ? 2 : 4;
-  wrap.style.gap = gap + 'px';
+  const colGap = count > 300 ? 1 : count > 120 ? 2 : 4;
+  wrap.style.rowGap = '0px';
+  wrap.style.columnGap = colGap + 'px';
   wrap.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  wrap.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+  // interleave a thin "connector" row between every pair of tile rows —
+  // this is where the road visually turns, instead of a flat table grid
+  const rowTemplate = [];
+  for(let r = 0; r < rows; r++){
+    rowTemplate.push('1fr');
+    if(r < rows - 1) rowTemplate.push('0.42fr');
+  }
+  wrap.style.gridTemplateRows = rowTemplate.join(' ');
 
   for(let i = 0; i < count; i++){
     const row = Math.floor(i / cols);
@@ -771,10 +789,35 @@ function buildGridTiles(wrap, theme, count){
     tl.className = 'tile';
     tl.id = 'tile-' + (i+1);
     tl.style.gridColumn = (col+1);
-    tl.style.gridRow = (row+1);
+    tl.style.gridRow = (row*2 + 1);
     if(i === 0) tl.classList.add('start');
     if(i === count-1) tl.classList.add('finish');
     wrap.appendChild(tl);
+  }
+
+  // one connector piece bridging every row turn (continuity), plus a light
+  // decorative touch elsewhere in that row's gap
+  const decoSize = Math.max(9, Math.min(18, Math.floor(140 / Math.sqrt(count))));
+  for(let r = 0; r < rows - 1; r++){
+    const turnCol = (r % 2 === 0) ? cols : 1;
+    const link = document.createElement('div');
+    link.className = 'row-link';
+    link.style.gridColumn = turnCol;
+    link.style.gridRow = (r*2 + 2);
+    wrap.appendChild(link);
+
+    if(theme.decor && theme.decor.length && cols > 2){
+      const decorCol = clamp(1 + ((r*3 + 2) % (cols - 1)), 1, cols);
+      if(decorCol !== turnCol){
+        const deco = document.createElement('span');
+        deco.className = 'row-deco';
+        deco.textContent = theme.decor[r % theme.decor.length].e;
+        deco.style.fontSize = decoSize + 'px';
+        deco.style.gridColumn = decorCol;
+        deco.style.gridRow = (r*2 + 2);
+        wrap.appendChild(deco);
+      }
+    }
   }
 }
 
@@ -785,28 +828,58 @@ function buildPathTiles(wrap, theme, count){
   const size = Math.max(5, Math.min(30, Math.floor(Math.min(W / 8, H / (count/6 || 1)))));
   const usableH = Math.max(1, H - size);
   const usableW = Math.max(1, W - size);
-  const ampScale = 0.42;
+
+  // few, wide oscillations regardless of tile count — reads as one smooth
+  // meandering river/trail instead of scattered dots
+  const numWaves = clamp(Math.round(count / 30), 2, 6);
+  const freq = numWaves * 2 * Math.PI / Math.max(1, count - 1);
+  const riverAmp = 0.34;
+  const footstepAmp = 0.07; // small alternating footprint offset (dino only)
+
+  const centers = [];
   for(let i = 0; i < count; i++){
     const frac = count > 1 ? i / (count - 1) : 0;
-    const topPx = frac * usableH;
-    let xFrac;
-    if(theme.layout === 'wave'){
-      xFrac = 0.5 + Math.sin(i * 0.5) * ampScale;
-    } else {
-      xFrac = 0.5 + (i % 2 === 0 ? -1 : 1) * ampScale * (0.75 + 0.25 * Math.sin(i * 0.12));
+    const topPx = frac * usableH + size/2;
+    let xFrac = 0.5 + Math.sin(i * freq) * riverAmp;
+    if(theme.layout === 'zigzag'){
+      xFrac += (i % 2 === 0 ? -1 : 1) * footstepAmp;
     }
-    const leftPx = xFrac * usableW;
+    const leftPx = clamp(xFrac, 0, 1) * usableW + size/2;
+    centers.push([leftPx, topPx]);
+  }
+
+  // a visible connecting line under the tiles, so gaps between them still
+  // read as part of one continuous path
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.style.position = 'absolute';
+  svg.style.inset = '0';
+  svg.style.pointerEvents = 'none';
+  const poly = document.createElementNS(svgNS, 'polyline');
+  poly.setAttribute('points', centers.map(c => c[0] + ',' + c[1]).join(' '));
+  poly.setAttribute('fill', 'none');
+  poly.setAttribute('stroke', theme.trackBgLight);
+  poly.setAttribute('stroke-width', Math.max(2, size * 0.55));
+  poly.setAttribute('stroke-linecap', 'round');
+  poly.setAttribute('stroke-linejoin', 'round');
+  poly.setAttribute('opacity', '0.9');
+  svg.appendChild(poly);
+  wrap.appendChild(svg);
+
+  centers.forEach((c, i) => {
     const tl = document.createElement('div');
     tl.className = 'tile-path';
     tl.id = 'tile-' + (i+1);
     tl.style.width = size + 'px';
     tl.style.height = size + 'px';
-    tl.style.left = leftPx + 'px';
-    tl.style.top = topPx + 'px';
+    tl.style.left = (c[0] - size/2) + 'px';
+    tl.style.top = (c[1] - size/2) + 'px';
     if(i === 0) tl.classList.add('start');
     if(i === count-1) tl.classList.add('finish');
     wrap.appendChild(tl);
-  }
+  });
 }
 
 function buildDecor(theme){
