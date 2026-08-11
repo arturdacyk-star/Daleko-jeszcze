@@ -1463,24 +1463,24 @@ async function geocodeAddress(query){
     const data = await apiFetch('/geocode?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(settings.lang));
     return Array.isArray(data) ? data : (data.results || []);
   }
-  if(MAPBOX_TOKEN){
-    try{
-      const r = await geocodeMapbox(query);
-      if(r.length > 0) return r;
-      throw new Error('no Mapbox results');
-    } catch(errM){
-      try{ return await geocodeNominatim(query); }
-      catch(errA){ throw new Error(errM.message + ' / ' + errA.message); }
-    }
-  }
-  try{
-    const r = await geocodeNominatim(query);
-    if(r.length > 0) return r;
-    throw new Error('no Nominatim results');
-  } catch(errA){
-    try{ return await geocodePhoton(query); }
-    catch(errB){ throw new Error(errA.message + ' / ' + errB.message); }
-  }
+  // query Mapbox and Nominatim together rather than treating any non-empty
+  // Mapbox response as "good enough" — Mapbox is the stabler service
+  // overall, but Nominatim (OpenStreetMap) is noticeably better for rural
+  // Polish addresses like "village name + bare house number, no street"
+  const [mapboxRes, nominatimRes] = await Promise.all([
+    MAPBOX_TOKEN ? geocodeMapbox(query).catch(e => { console.warn('Mapbox geocoding failed:', e); return []; }) : Promise.resolve([]),
+    geocodeNominatim(query).catch(e => { console.warn('Nominatim geocoding failed:', e); return []; })
+  ]);
+  const combined = [...mapboxRes, ...nominatimRes];
+  const deduped = [];
+  combined.forEach(r => {
+    const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+    const isDup = deduped.some(d => Math.abs(parseFloat(d.lat) - lat) < 0.001 && Math.abs(parseFloat(d.lon) - lon) < 0.001);
+    if(!isDup) deduped.push(r);
+  });
+  if(deduped.length > 0) return deduped.slice(0, 6);
+  // both came back empty — last resort
+  return await geocodePhoton(query);
 }
 
 function renderGenericResults(listEl, results, statusEl, onPick){
