@@ -694,11 +694,13 @@ function showDestHistory(){
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 /* ---------- API LAYER ----------
-   Puste API_BASE_URL = działamy w 100% lokalnie (darmowe Nominatim/Photon/OSRM).
-   Gdy w przyszłości dodasz własny backend, ustaw API_BASE_URL — apka sama
-   zacznie go używać zamiast wywołań bezpośrednich z przeglądarki.
-   Oczekiwane endpointy: GET /geocode?q=...&lang=...  |  POST /route {start,destination}
+   Geocoding (address search) and routing (road distance) use Mapbox —
+   stable, real-usage-limits service, restricted to this GitHub Pages
+   domain via the token's URL restriction in the Mapbox dashboard.
+   The free "pick a point on a map" picker still uses OpenStreetMap tiles
+   directly (no key, no per-request limit, fine for many simultaneous users).
 */
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXJ0dXJkYWN5ayIsImEiOiJjbXNvcTB4bGgwNmRzMnlzYmthdXM4aXltIn0.Y_bzVAIuW73jNvP_PN3c2A';
 const API_BASE_URL = '';
 async function apiFetch(path, options = {}){
   if(!API_BASE_URL) throw new Error('BACKEND_NOT_CONFIGURED');
@@ -801,12 +803,7 @@ function checkForSavedTrip(){
     buildBoard();
     renderProgress(maxProgress);
 
-    const routeIcon = $('routeModeIcon');
-    if(settings.forceStraightLine || !usingRoute){
-      routeIcon.textContent = '📏'; routeIcon.title = t('routeModeStraightTitle');
-    } else {
-      routeIcon.textContent = '〰️'; routeIcon.title = t('routeModeRouteTitle');
-    }
+    updateRouteModeIcon();
     requestWakeLock();
     startTracking();
   };
@@ -845,6 +842,17 @@ async function fetchRoute(sLat, sLng, dLat, dLng){
     if(points.length < 2) throw new Error('invalid backend route');
     const cum = buildCumulativeDistances(points);
     return {points, cum, totalKm: Number(data.totalKm || data.distanceKm || cum[cum.length-1])};
+  }
+  if(MAPBOX_TOKEN){
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Mapbox Directions HTTP ' + res.status);
+    const data = await res.json();
+    if(!data.routes || data.routes.length === 0) throw new Error('no road route');
+    const route = data.routes[0];
+    const points = route.geometry.coordinates.map(c => [c[1], c[0]]);
+    const cum = buildCumulativeDistances(points);
+    return {points, cum, totalKm: route.distance / 1000};
   }
   const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`;
   const res = await fetch(url);
@@ -1248,8 +1256,12 @@ function acceptProgressFromGps(pos){
     }
     routeRecalc.active = false; // back close enough to the route — reset the deviation timer
   } else {
+    // straight-line mode: totalDistance is the distance from wherever this
+    // mode started (trip start, or a mid-trip fallback) to the destination;
+    // progressBase (usually 0 here, but not always — see the mid-trip
+    // recalculation fallback) blends it in the same way as route mode
     const remaining = haversine(lat, lng, destLat, destLng);
-    fraction = (totalDistance - remaining) / totalDistance;
+    fraction = progressBase + (1 - progressBase) * ((totalDistance - remaining) / totalDistance);
   }
   fraction = clamp(fraction, 0, 1);
 
@@ -1326,6 +1338,18 @@ function handlePossibleDeviation(lat, lng, accuracy, match, now){
   }
 }
 
+function updateRouteModeIcon(){
+  const routeIcon = $('routeModeIcon');
+  if(!routeIcon) return;
+  if(settings.forceStraightLine || !usingRoute){
+    routeIcon.textContent = '📏';
+    routeIcon.title = t('routeModeStraightTitle');
+  } else {
+    routeIcon.textContent = '〰️';
+    routeIcon.title = t('routeModeRouteTitle');
+  }
+}
+
 async function recalcRouteFromCurrentPosition(lat, lng){
   try{
     const newRoute = await fetchRoute(lat, lng, destLat, destLng);
@@ -1333,14 +1357,29 @@ async function recalcRouteFromCurrentPosition(lat, lng){
     routePoints = newRoute.points;
     routeCumDist = newRoute.cum;
     totalDistance = newRoute.totalKm;
+    usingRoute = true;
     routeMeta.segments = null;
     buildSegmentMeta();
     gpsState.lastAcceptedIndex = 0;
     gpsState.pendingJump = null;
     routeRecalc.active = false;
+    updateRouteModeIcon();
     saveTripState();
   } catch(e){
-    console.warn('Route recalculation failed:', e);
+    // no route (e.g. offline) — don't get stuck waiting forever on a route
+    // that no longer matches; fall back to straight-line distance from here
+    console.warn('Route recalculation failed, switching to straight-line distance:', e);
+    progressBase = maxProgress;
+    usingRoute = false;
+    routePoints = null;
+    routeCumDist = null;
+    routeMeta.segments = null;
+    totalDistance = haversine(lat, lng, destLat, destLng);
+    gpsState.lastAcceptedIndex = 0;
+    gpsState.pendingJump = null;
+    routeRecalc.active = false;
+    updateRouteModeIcon();
+    saveTripState();
   } finally {
     routeRecalc.pending = false;
   }
@@ -1368,6 +1407,17 @@ function stopTracking(){
   if(watchId !== null){ navigator.geolocation.clearWatch(watchId); watchId = null; }
 }
 
+async function geocodeMapbox(query){
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?limit=5&language=${settings.lang}&access_token=${MAPBOX_TOKEN}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Mapbox Geocoding HTTP ' + res.status);
+  const data = await res.json();
+  return (data.features || []).map(f => ({
+    lat: f.center[1], lon: f.center[0],
+    shortName: f.text || f.place_name.split(',')[0],
+    fullName: f.place_name
+  }));
+}
 async function geocodeNominatim(query){
   const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&accept-language=' + settings.lang + '&q=' + encodeURIComponent(query);
   const res = await fetch(url, {headers: {'Accept': 'application/json'}});
@@ -1390,6 +1440,16 @@ async function geocodeAddress(query){
   if(API_BASE_URL){
     const data = await apiFetch('/geocode?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(settings.lang));
     return Array.isArray(data) ? data : (data.results || []);
+  }
+  if(MAPBOX_TOKEN){
+    try{
+      const r = await geocodeMapbox(query);
+      if(r.length > 0) return r;
+      throw new Error('no Mapbox results');
+    } catch(errM){
+      try{ return await geocodeNominatim(query); }
+      catch(errA){ throw new Error(errM.message + ' / ' + errA.message); }
+    }
   }
   try{
     const r = await geocodeNominatim(query);
@@ -1654,14 +1714,7 @@ $('startBtn').addEventListener('click', async () => {
   renderProgress(0);
   saveTripState();
 
-  const routeIcon = $('routeModeIcon');
-  if(settings.forceStraightLine || !usingRoute){
-    routeIcon.textContent = '📏';
-    routeIcon.title = t('routeModeStraightTitle');
-  } else {
-    routeIcon.textContent = '〰️';
-    routeIcon.title = t('routeModeRouteTitle');
-  }
+  updateRouteModeIcon();
 
   requestWakeLock();
   startTracking();
@@ -1824,6 +1877,14 @@ $('forceStraightToggle').addEventListener('change', () => {
 applyStaticTexts();
 document.documentElement.lang = settings.lang;
 checkForSavedTrip();
+
+/* register the service worker so the app can open with no internet
+   (e.g. airplane mode) once it's been visited online at least once */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('Service worker registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>
