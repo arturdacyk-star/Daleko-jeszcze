@@ -107,6 +107,8 @@
     background:none; border:2px solid #D8DEE8; color:#6b7688; font-family:'Baloo 2';
     font-weight:600; border-radius:14px; padding:10px; font-size:14px; cursor:pointer; width:100%;
   }
+  #mapPickBtn{margin-top:10px;}
+
   .status-msg{font-size:13px; text-align:center; margin-top:8px; min-height:16px; color:var(--asphalt);}
   .status-msg.error{color:var(--coral); font-weight:700;}
   .bottom-actions #resetBtn{background:#fff; border:2px solid #C7CEDA; color:var(--ink); box-shadow:0 2px 6px rgba(0,0,0,.08);}
@@ -165,8 +167,14 @@
   .theme-preview-row .txt{flex:1; font-family:'Baloo 2'; font-weight:600; font-size:14px;}
   .theme-preview-row button{background:none; border:none; color:#6b7688; font-size:12px; text-decoration:underline; cursor:pointer;}
 
-  .options-header{width:100%; display:flex; align-items:center; gap:10px; margin-bottom:18px;}
-  .back-btn{background:rgba(255,255,255,.85); border:none; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(36,48,61,.15);}
+  .options-header{width:100%; display:flex; align-items:center; gap:12px; margin-bottom:18px;}
+  .back-btn{
+    background:rgba(255,255,255,.9); border:2px solid #E4E9F0; width:42px; height:42px;
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    color:var(--ink); cursor:pointer; box-shadow:0 4px 10px rgba(36,48,61,.12);
+    transition:transform .1s ease, background .2s ease; flex-shrink:0;
+  }
+  .back-btn:active{transform:scale(0.92); background:#F0F4F8;}
   .options-title{font-family:'Baloo 2'; font-size:22px; font-weight:700;}
 
   .lang-row{display:flex; gap:8px;}
@@ -243,7 +251,7 @@
     position:relative;
   }
   .tile{
-    position:relative; border-radius:5px;
+    position:relative; border-radius:8px;
     background:var(--asphalt-light);
     display:flex; align-items:center; justify-content:center;
     transition:background .3s ease, transform .2s ease;
@@ -251,8 +259,7 @@
   .tile.done{background:var(--grass);}
   .tile.start{background:var(--sun);}
   .tile.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
-  .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
-  .tile.turn{border-radius:40%;}
+  .tile.current{transform:scale(1.2); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
 
   .row-deco{
@@ -269,7 +276,7 @@
   .tile-path.done{background:var(--grass);}
   .tile-path.start{background:var(--sun);}
   .tile-path.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
-  .tile-path.current{transform:scale(1.4) !important; z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
+  .tile-path.current{transform:scale(1.35) !important; z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile-path .car{line-height:1;}
 
   .bottom-actions{width:100%; margin-top:8px; flex-shrink:0;}
@@ -360,7 +367,12 @@
 <!-- OPTIONS SCREEN -->
 <div class="screen hidden" id="optionsScreen">
   <div class="options-header">
-    <button class="back-btn" id="optionsBackBtn">←</button>
+    <button class="back-btn" id="optionsBackBtn" aria-label="Powrót">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    </button>
     <div class="options-title" id="optionsTitle">Opcje gry</div>
   </div>
 
@@ -380,7 +392,7 @@
 
   <div class="card">
     <h2 id="tileCardTitle">🔢 Liczba pól trasy</h2>
-    <p class="hint" id="tileCardHint">Od 10 (krótka gra) do 1000 (długa trasa). Domyślnie 100.</p>
+    <p class="hint" id="tileCardHint">Od 10 (krótka gra) do 300 (długa trasa). Domyślnie 100.</p>
     <div class="tile-count-row">
       <input type="range" id="tileCountRange" min="10" max="300" step="10" value="100">
       <input type="number" id="tileCountNum" class="tile-count-num" min="10" max="300" value="100">
@@ -478,7 +490,7 @@ const I18N = {
     themeCardTitle:'🎨 Motyw planszy',
     themeCardHint:'Każdy motyw ma inny kształt trasy i inne postacie.',
     tileCardTitle:'🔢 Liczba pól trasy',
-    tileCardHint:'Od 10 (krótka gra) do 1000 (długa trasa). Domyślnie 100.',
+    tileCardHint:'Od 10 (krótka gra) do 300 (długa trasa). Domyślnie 100.',
     tileCountHint2:'Duża liczba pól = mniejsze pola, żeby wszystko zmieściło się na ekranie.',
     straightLineLabel:'📏 Zawsze linia prosta',
     straightLineSub:'Nie licz realnej trasy drogowej, nawet gdy internet działa.',
@@ -548,7 +560,7 @@ const I18N = {
     themeCardTitle:'🎨 Board theme',
     themeCardHint:'Each theme has a different track shape and characters.',
     tileCardTitle:'🔢 Number of route tiles',
-    tileCardHint:'From 10 (short game) to 1000 (long route). Default is 100.',
+    tileCardHint:'From 10 (short game) to 300 (long route). Default is 100.',
     tileCountHint2:'More tiles = smaller tiles, so everything still fits on screen.',
     straightLineLabel:'📏 Always straight line',
     straightLineSub:"Don't calculate the real road route, even when the internet works.",
@@ -638,7 +650,7 @@ let startLat, startLng, totalDistance;
 let routePoints = null;
 let routeCumDist = null;
 let usingRoute = false;
-let progressBase = 0; // % locked in at the last route recalculation — never goes down
+let progressBase = 0;
 let maxProgress = 0;
 let watchId = null;
 let resizeTimer = null;
@@ -683,12 +695,6 @@ function showDestHistory(){
 }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
-/* ---------- API LAYER ----------
-   Puste API_BASE_URL = działamy w 100% lokalnie (darmowe Nominatim/Photon/OSRM).
-   Gdy w przyszłości dodasz własny backend, ustaw API_BASE_URL — apka sama
-   zacznie go używać zamiast wywołań bezpośrednich z przeglądarki.
-   Oczekiwane endpointy: GET /geocode?q=...&lang=...  |  POST /route {start,destination}
-*/
 const API_BASE_URL = '';
 async function apiFetch(path, options = {}){
   if(!API_BASE_URL) throw new Error('BACKEND_NOT_CONFIGURED');
@@ -704,14 +710,13 @@ async function apiFetch(path, options = {}){
   } finally { clearTimeout(timer); }
 }
 
-/* ---------- WAKE LOCK (keep screen on during the trip) ---------- */
 async function requestWakeLock(){
   try{
     if('wakeLock' in navigator){
       wakeLock = await navigator.wakeLock.request('screen');
       wakeLock.addEventListener('release', () => { wakeLock = null; });
     }
-  } catch(e){ /* unsupported or refused — ignore, not critical */ }
+  } catch(e){}
 }
 function releaseWakeLock(){
   try{ wakeLock?.release(); } catch(e){}
@@ -723,7 +728,6 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
-/* ---------- TRIP PERSISTENCE (survive refresh / closed tab) ---------- */
 function saveTripState(){
   try{
     const data = {
@@ -735,7 +739,7 @@ function saveTripState(){
       savedAt: Date.now()
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch(e){ /* storage unavailable (e.g. private mode, in-chat preview) — ignore */ }
+  } catch(e){}
 }
 function loadTripState(){
   try{
@@ -845,7 +849,7 @@ async function fetchRoute(sLat, sLng, dLat, dLng){
   return {points, cum, totalKm: route.distance / 1000};
 }
 
-/* ---------- BOARD BUILDING (always fits the container, no scrolling) ---------- */
+/* ---------- BOARD BUILDING ---------- */
 function applyThemeVars(theme){
   const root = document.documentElement.style;
   root.setProperty('--sky-top', theme.bgTop);
@@ -860,68 +864,30 @@ function applyThemeVars(theme){
 function buildGridTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-grid';
   wrap.style.display = 'grid';
-  // square-ish arrangement (cols ≈ rows) reads much better than one driven
-  // by the container's own aspect ratio; theme bias still gives forest its
-  // narrower switchback character
+
   let cols = Math.max(3, Math.round(Math.sqrt(count * (theme.gridAspectBias || 1))));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
   const colGap = count > 200 ? 1 : count > 80 ? 2 : 4;
-  wrap.style.rowGap = '0px';
-  wrap.style.columnGap = colGap + 'px';
-  wrap.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-  // interleave a full-size "turn" row between every pair of tile rows —
-  // this is where the road visually bends, instead of a flat table grid
-  const rowTemplate = [];
-  for(let r = 0; r < rows; r++){
-    rowTemplate.push('1fr');
-    if(r < rows - 1) rowTemplate.push('1fr');
-  }
-  wrap.style.gridTemplateRows = rowTemplate.join(' ');
+  wrap.style.gap = colGap + 'px';
+  wrap.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  wrap.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
   for(let i = 0; i < count; i++){
     const row = Math.floor(i / cols);
     const colInRow = i % cols;
     const col = (row % 2 === 1) ? (cols - 1 - colInRow) : colInRow;
+
     const tl = document.createElement('div');
     tl.className = 'tile';
     tl.id = 'tile-' + (i+1);
-    tl.style.gridColumn = (col+1);
-    tl.style.gridRow = (row*2 + 1);
+    tl.style.gridColumn = (col + 1);
+    tl.style.gridRow = (row + 1);
+
     if(i === 0) tl.classList.add('start');
     if(i === count-1) tl.classList.add('finish');
     wrap.appendChild(tl);
-  }
-
-  // the tile at the end of each row bridges the gap into the next row —
-  // it's a real, counted route tile (lights up, hosts the car) that just
-  // visually spans into the turn, instead of a separate decorative piece
-  const decoSize = Math.max(9, Math.min(18, Math.floor(140 / Math.sqrt(count))));
-  for(let r = 0; r < rows - 1; r++){
-    const turnCol = (r % 2 === 0) ? cols : 1;
-    const lastIdxInRow = (r+1) * cols - 1;
-    if(lastIdxInRow < count){
-      const el = $('tile-' + (lastIdxInRow+1));
-      if(el){
-        el.style.gridRow = (r*2 + 1) + ' / ' + (r*2 + 3);
-        el.classList.add('turn');
-      }
-    }
-
-    if(theme.decor && theme.decor.length && cols > 2){
-      const decorCol = clamp(1 + ((r*3 + 2) % (cols - 1)), 1, cols);
-      if(decorCol !== turnCol){
-        const deco = document.createElement('span');
-        deco.className = 'row-deco';
-        deco.textContent = theme.decor[r % theme.decor.length].e;
-        deco.style.fontSize = decoSize + 'px';
-        deco.style.gridColumn = decorCol;
-        deco.style.gridRow = (r*2 + 2);
-        deco.style.animationDelay = (r * 0.3) + 's';
-        wrap.appendChild(deco);
-      }
-    }
   }
 }
 
@@ -930,19 +896,19 @@ function buildPathTiles(wrap, theme, count){
   wrap.style.display = 'block';
   const W = wrap.clientWidth, H = wrap.clientHeight;
 
-  // use the same row/column density as the grid themes (cols ≈ sqrt(count))
-  // so tiles end up the same visual size as road/forest at the same count —
-  // then wobble each tile within its row band for the meandering look
   let cols = Math.max(3, Math.round(Math.sqrt(count)));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
   const cellW = W / cols;
   const cellH = H / rows;
-  const size = Math.max(6, Math.min(34, Math.floor(Math.min(cellW, cellH) * 0.66)));
 
-  const waveFreq = (2 * Math.PI * 1.4) / cols;
-  const waveAmp = cellH * 0.32;
-  const footstepAmp = cellH * 0.14; // small alternating footprint offset (dino only)
+  // Reduced tile size ratio to ensure dots never collide vertically or horizontally
+  const size = Math.max(5, Math.min(26, Math.floor(Math.min(cellW, cellH) * 0.48)));
+
+  const waveFreq = (2 * Math.PI * 1.2) / cols;
+  const isZigzag = theme.layout === 'zigzag';
+  const waveAmp = isZigzag ? cellH * 0.08 : cellH * 0.18;
+  const footstepAmp = isZigzag ? cellH * 0.06 : 0;
 
   const centers = [];
   for(let i = 0; i < count; i++){
@@ -950,15 +916,13 @@ function buildPathTiles(wrap, theme, count){
     const colInRow = i % cols;
     const col = (row % 2 === 1) ? (cols - 1 - colInRow) : colInRow;
     let y = (row + 0.5) * cellH + Math.sin(colInRow * waveFreq) * waveAmp;
-    if(theme.layout === 'zigzag'){
+    if(isZigzag){
       y += (i % 2 === 0 ? -1 : 1) * footstepAmp;
     }
     const x = (col + 0.5) * cellW;
-    centers.push([x, clamp(y, size/2, H - size/2)]);
+    centers.push([x, clamp(y, size/2 + 2, H - size/2 - 2)]);
   }
 
-  // a visible connecting line under the tiles, so gaps between them still
-  // read as part of one continuous path
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('width', '100%');
@@ -970,10 +934,10 @@ function buildPathTiles(wrap, theme, count){
   poly.setAttribute('points', centers.map(c => c[0] + ',' + c[1]).join(' '));
   poly.setAttribute('fill', 'none');
   poly.setAttribute('stroke', theme.trackBgLight);
-  poly.setAttribute('stroke-width', Math.max(2, size * 0.55));
+  poly.setAttribute('stroke-width', Math.max(2, size * 0.45));
   poly.setAttribute('stroke-linecap', 'round');
   poly.setAttribute('stroke-linejoin', 'round');
-  poly.setAttribute('opacity', '0.9');
+  poly.setAttribute('opacity', '0.8');
   svg.appendChild(poly);
   wrap.appendChild(svg);
 
@@ -990,12 +954,10 @@ function buildPathTiles(wrap, theme, count){
     wrap.appendChild(tl);
   });
 
-  // themed decorations spread along the path, offset to the side so they
-  // don't collide with the tiles or the connecting line
   if(theme.decor && theme.decor.length){
-    const decorCount = clamp(Math.round(count / 25) * 3, 9, 30);
-    const decorSize = Math.max(10, Math.min(20, Math.floor(size * 1.1)));
-    const offset = size * 1.6 + 6;
+    const decorCount = clamp(Math.round(count / 25) * 3, 6, 20);
+    const decorSize = Math.max(10, Math.min(18, Math.floor(size * 1.1)));
+    const offset = size * 1.5 + 4;
     for(let k = 0; k < decorCount; k++){
       const idx = Math.min(count - 1, Math.floor((k + 0.5) * (count - 1) / decorCount));
       const c = centers[idx];
@@ -1059,7 +1021,7 @@ function renderProgress(fraction){
   const count = settings.tileCount;
   const filledTiles = Math.floor(fraction * count);
   const currentTile = Math.min(count, filledTiles + 1);
-  const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
+  const carMinSize = Math.floor(160 / Math.sqrt(100));
   const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
 
   for(let i = 1; i <= count; i++){
@@ -1085,9 +1047,6 @@ function renderProgress(fraction){
   $('progressFill').style.width = (fraction*100) + '%';
   $('statPercent').textContent = Math.round(fraction*100) + '%';
 
-  // totalDistance reflects only the current (possibly recalculated) route
-  // segment, so km-remaining must use the sub-fraction within that segment,
-  // not the overall blended fraction
   const subFraction = clamp((fraction - progressBase) / Math.max(1e-6, 1 - progressBase), 0, 1);
   const remainingKm = totalDistance * (1 - subFraction);
   $('statKm').textContent = remainingKm < 10 ? remainingKm.toFixed(1) : Math.round(remainingKm);
@@ -1113,13 +1072,7 @@ function renderProgress(fraction){
   }
 }
 
-/* ---------- ROBUST GPS ↔ ROUTE MATCHING ----------
-   Zamiast szukać najbliższego POJEDYNCZEGO punktu trasy (co na długich
-   prostych odcinkach OSRM z rzadko rozstawionymi punktami dawało niedokładne
-   "przyklejenie"), rzutujemy pozycję GPS na najbliższy ODCINEK trasy —
-   dokładniejsze. Dodatkowo porównujemy kierunek jazdy z kierunkiem odcinka,
-   żeby nie pomylić np. mostu z równoległą drogą serwisową pod spodem.
-*/
+/* ---------- GPS ↔ ROUTE MATCHING ---------- */
 let gpsState = {lastAcceptedIndex:0, lastAcceptedProgress:0, lastPosition:null, lastTimestamp:0, pendingJump:null};
 let routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
 let routeMeta = {segments:null};
@@ -1179,12 +1132,8 @@ function projectGpsToRoute(lat, lng, accuracy){
   return best;
 }
 
-// finds the route-point index closest to a given progress fraction —
-// used to seed gpsState when resuming a saved trip or starting fresh
 function indexForProgress(fraction){
   if(!usingRoute || !routeCumDist) return 0;
-  // totalDistance covers only the current route segment (see progressBase),
-  // so convert the overall fraction into a sub-fraction within it first
   const subFraction = clamp((fraction - progressBase) / Math.max(1e-6, 1 - progressBase), 0, 1);
   const targetKm = subFraction * totalDistance;
   let idx = 0;
@@ -1204,9 +1153,6 @@ function acceptProgressFromGps(pos){
   let fraction, matchedIndex = 0;
 
   if(usingRoute && match){
-    // blend: progressBase is locked in from any earlier recalculation and
-    // never goes down; the remaining (1-progressBase) share fills in from
-    // progress along the current (possibly recalculated) route segment
     fraction = progressBase + (1 - progressBase) * (match.alongKm / totalDistance);
     matchedIndex = match.index;
     const offRouteThreshold = Math.max(0.12, accuracy/1000*4);
@@ -1214,17 +1160,15 @@ function acceptProgressFromGps(pos){
       handlePossibleDeviation(lat, lng, accuracy, match, now);
       $('boardStatus').textContent = t('gpsWeak');
       $('boardStatus').classList.remove('error');
-      return; // too far from any known segment — likely noisy fix, skip it
+      return;
     }
-    routeRecalc.active = false; // back close enough to the route — reset the deviation timer
+    routeRecalc.active = false;
   } else {
     const remaining = haversine(lat, lng, destLat, destLng);
     fraction = (totalDistance - remaining) / totalDistance;
   }
   fraction = clamp(fraction, 0, 1);
 
-  // don't let a single noisy fix near the end declare arrival — only accept
-  // fraction===1 once we're also physically close to the destination point
   if(fraction >= 0.98){
     const directDist = haversine(lat, lng, destLat, destLng);
     const arrivalThreshold = Math.max(0.05, (accuracy || 30) / 1000 * 2);
@@ -1233,8 +1177,6 @@ function acceptProgressFromGps(pos){
     }
   }
 
-  // reject GPS jumps that are physically implausible in the elapsed time,
-  // unless the same jump repeats (then it's probably real, e.g. a tunnel exit)
   const jump = fraction - gpsState.lastAcceptedProgress;
   const previous = gpsState.lastPosition;
   const elapsed = Math.max(0.5, (now - gpsState.lastTimestamp) / 1000);
@@ -1243,7 +1185,7 @@ function acceptProgressFromGps(pos){
 
   if(jump > maxReasonableJump && gpsState.lastAcceptedProgress < 0.95){
     if(gpsState.pendingJump && Math.abs(gpsState.pendingJump.fraction - fraction) < 0.04){
-      gpsState.pendingJump = null; // confirmed by a second, similar reading — accept below
+      gpsState.pendingJump = null;
     } else {
       gpsState.pendingJump = {fraction, index:matchedIndex, at:now};
       $('boardStatus').textContent = t('gpsWeak');
@@ -1270,12 +1212,8 @@ function acceptProgressFromGps(pos){
   }
 }
 
-// called when GPS sits too far from the calculated route to trust — not an
-// error by itself (there's often more than one way to reach a destination),
-// but if it's sustained AND the car is actually moving, the original route
-// is no longer useful and we quietly recalculate from here
 function handlePossibleDeviation(lat, lng, accuracy, match, now){
-  const deviationThreshold = Math.max(0.45, (accuracy || 30) / 1000 * 6); // km
+  const deviationThreshold = Math.max(0.45, (accuracy || 30) / 1000 * 6);
   if(match.distanceKm <= deviationThreshold){
     routeRecalc.active = false;
     return;
@@ -1288,7 +1226,7 @@ function handlePossibleDeviation(lat, lng, accuracy, match, now){
   }
   const elapsedSec = (now - routeRecalc.startTime) / 1000;
   const movedKm = haversine(routeRecalc.startPos.lat, routeRecalc.startPos.lng, lat, lng);
-  const cooldownOk = (now - routeRecalc.lastRecalcAt) > 150000; // 2.5 min between recalculations
+  const cooldownOk = (now - routeRecalc.lastRecalcAt) > 150000;
   if(elapsedSec >= 50 && movedKm >= 0.25 && cooldownOk && !routeRecalc.pending){
     routeRecalc.pending = true;
     routeRecalc.lastRecalcAt = now;
@@ -1299,7 +1237,7 @@ function handlePossibleDeviation(lat, lng, accuracy, match, now){
 async function recalcRouteFromCurrentPosition(lat, lng){
   try{
     const newRoute = await fetchRoute(lat, lng, destLat, destLng);
-    progressBase = maxProgress; // lock in what's already been covered — the board never rewinds
+    progressBase = maxProgress;
     routePoints = newRoute.points;
     routeCumDist = newRoute.cum;
     totalDistance = newRoute.totalKm;
@@ -1436,42 +1374,54 @@ $('destAddress').addEventListener('input', () => {
   else { $('resultsList').classList.add('hidden'); $('resultsList').innerHTML = ''; }
 });
 
-/* ---- pick destination by tapping a map (free OpenStreetMap/Leaflet,
-   no API key — fallback for addresses the geocoder can't find) ---- */
+/* ---- map picker (now immediately centers on user GPS with zoom 14) ---- */
 let pickerMap = null, pickerMarker = null, pickerLatLng = null;
-function ensurePickerMap(){
-  if(pickerMap) return;
-  pickerMap = L.map('mapPickerMap').setView([52.0, 19.0], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap'
-  }).addTo(pickerMap);
+
+function centerPickerOnUser(){
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
-      pos => { if(pickerMap) pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 11); },
-      () => {}, { timeout: 3000 }
+      pos => {
+        if(pickerMap){
+          pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
+        }
+      },
+      err => { console.warn('Picker GPS fallback', err); },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
     );
   }
-  pickerMap.on('click', async (e) => {
-    pickerLatLng = e.latlng;
-    if(pickerMarker) pickerMarker.setLatLng(e.latlng);
-    else pickerMarker = L.marker(e.latlng).addTo(pickerMap);
-    $('mapPickerConfirm').disabled = false;
-    $('mapPickerName').textContent = t('searching');
-    try{
-      const url = 'https://nominatim.openstreetmap.org/reverse?format=json&accept-language=' + settings.lang
-        + '&lat=' + e.latlng.lat + '&lon=' + e.latlng.lng;
-      const res = await fetch(url, {headers:{'Accept':'application/json'}});
-      const data = await res.json();
-      $('mapPickerName').textContent = data.display_name || (e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
-    } catch(err){
-      $('mapPickerName').textContent = e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5);
-    }
-  });
 }
+
+function ensurePickerMap(){
+  if(!pickerMap){
+    pickerMap = L.map('mapPickerMap').setView([52.2297, 21.0122], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(pickerMap);
+
+    pickerMap.on('click', async (e) => {
+      pickerLatLng = e.latlng;
+      if(pickerMarker) pickerMarker.setLatLng(e.latlng);
+      else pickerMarker = L.marker(e.latlng).addTo(pickerMap);
+      $('mapPickerConfirm').disabled = false;
+      $('mapPickerName').textContent = t('searching');
+      try{
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=json&accept-language=' + settings.lang
+          + '&lat=' + e.latlng.lat + '&lon=' + e.latlng.lng;
+        const res = await fetch(url, {headers:{'Accept':'application/json'}});
+        const data = await res.json();
+        $('mapPickerName').textContent = data.display_name || (e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
+      } catch(err){
+        $('mapPickerName').textContent = e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5);
+      }
+    });
+  }
+  centerPickerOnUser();
+}
+
 $('mapPickBtn').addEventListener('click', () => {
   $('mapPickerOverlay').classList.remove('hidden');
   ensurePickerMap();
-  setTimeout(() => pickerMap && pickerMap.invalidateSize(), 50);
+  setTimeout(() => pickerMap && pickerMap.invalidateSize(), 100);
 });
 $('mapPickerClose').addEventListener('click', () => {
   $('mapPickerOverlay').classList.add('hidden');
@@ -1486,7 +1436,7 @@ $('mapPickerConfirm').addEventListener('click', () => {
   $('mapPickerOverlay').classList.add('hidden');
 });
 
-/* ---- start point (defaults to GPS, like Google Maps) ---- */
+/* ---- start point ---- */
 function selectStartPoint(r){
   startMode = 'custom';
   startCustomLat = parseFloat(r.lat);
