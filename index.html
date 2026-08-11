@@ -127,10 +127,12 @@
   }
   #mapPickerMap{flex:1; min-height:0;}
   #mapPickerLocate{
-    position:absolute; right:16px; bottom:110px; z-index:500;
+    position:absolute; right:16px; bottom:110px; z-index:1200;
     width:42px; height:42px; border-radius:50%; border:none;
     background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.25); font-size:18px; cursor:pointer;
   }
+  #mapPickerLocate.locating{animation:mapLocateSpin 1s linear infinite;}
+  @keyframes mapLocateSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   .map-picker-footer{padding:10px 16px 16px; border-top:1px solid #E4E9F0;}
   .map-picker-name{font-size:13px; color:#5a6478; text-align:center; margin-bottom:8px; min-height:16px;}
 
@@ -939,6 +941,12 @@ function buildPathTiles(wrap, theme, count){
   wrap.style.display = 'block';
   boardTileCount = count;
   const W = wrap.clientWidth, H = wrap.clientHeight;
+  // absolute-positioned children ignore the parent's own padding (unlike
+  // the CSS-grid themes, which respect it automatically) — inset the whole
+  // placement area manually so dots never sit flush against the frame
+  const pad = 10;
+  const usableW = Math.max(1, W - pad*2);
+  const usableH = Math.max(1, H - pad*2);
 
   // use the same row/column density as the grid themes (cols ≈ sqrt(count))
   // so tiles end up the same visual size as road/forest at the same count —
@@ -946,31 +954,32 @@ function buildPathTiles(wrap, theme, count){
   let cols = Math.max(3, Math.round(Math.sqrt(count)));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
-  const cellW = W / cols;
-  const cellH = H / rows;
+  const cellW = usableW / cols;
+  const cellH = usableH / rows;
 
   const waveFreq = (2 * Math.PI * 1.4) / cols;
-  const waveAmp = cellH * 0.32;
-  const footstepAmp = (theme.layout === 'zigzag') ? cellH * 0.08 : 0; // small alternating footprint offset (dino only)
+  const waveAmp = cellH * 0.30;
+  const footstepAmp = (theme.layout === 'zigzag') ? cellH * 0.055 : 0; // small alternating footprint offset (dino only)
 
   // worst case is the row-boundary pair (last tile of a row / first of the
   // next): their vertical gap can shrink by the wobble plus up to two
   // footstep offsets (consecutive tiles always alternate footstep sign) —
-  // keep the tile diameter safely below that so dots never touch
+  // keep the tile diameter safely below that so dots never touch, with
+  // extra breathing room right at that boundary
   const worstGap = cellH - waveAmp - 2*footstepAmp;
-  const size = Math.max(6, Math.min(34, Math.floor(Math.min(Math.min(cellW, cellH) * 0.66, worstGap * 0.85))));
+  const size = Math.max(6, Math.min(34, Math.floor(Math.min(Math.min(cellW, cellH) * 0.62, worstGap * 0.7))));
 
   const centers = [];
   for(let i = 0; i < count; i++){
     const row = Math.floor(i / cols);
     const colInRow = i % cols;
     const col = (row % 2 === 1) ? (cols - 1 - colInRow) : colInRow;
-    let y = (row + 0.5) * cellH + Math.sin(colInRow * waveFreq) * waveAmp;
+    let y = pad + (row + 0.5) * cellH + Math.sin(colInRow * waveFreq) * waveAmp;
     if(theme.layout === 'zigzag'){
       y += (i % 2 === 0 ? -1 : 1) * footstepAmp;
     }
-    const x = (col + 0.5) * cellW;
-    centers.push([x, clamp(y, size/2, H - size/2)]);
+    const x = pad + (col + 0.5) * cellW;
+    centers.push([x, clamp(y, pad + size/2, H - pad - size/2)]);
   }
 
   // a visible connecting line under the tiles, so gaps between them still
@@ -1019,7 +1028,7 @@ function buildPathTiles(wrap, theme, count){
       const deco = document.createElement('span');
       deco.className = 'row-deco';
       deco.style.position = 'absolute';
-      deco.style.left = clamp(c[0] + side * offset, decorSize * 0.6, W - decorSize * 0.6) + 'px';
+      deco.style.left = clamp(c[0] + side * offset, pad + decorSize * 0.6, W - pad - decorSize * 0.6) + 'px';
       deco.style.top = (c[1] - decorSize/2) + 'px';
       deco.style.fontSize = decorSize + 'px';
       deco.style.animationDelay = (k * 0.35) + 's';
@@ -1458,6 +1467,8 @@ $('destAddress').addEventListener('input', () => {
 let pickerMap = null, pickerMarker = null, pickerLatLng = null, myLocationMarker = null;
 function locateMeOnPicker(zoom){
   if(!navigator.geolocation || !pickerMap) return;
+  const btn = $('mapPickerLocate');
+  if(btn) btn.classList.add('locating');
   navigator.geolocation.getCurrentPosition(
     pos => {
       const ll = [pos.coords.latitude, pos.coords.longitude];
@@ -1466,8 +1477,13 @@ function locateMeOnPicker(zoom){
       else myLocationMarker = L.circleMarker(ll, {
         radius: 8, color: '#fff', weight: 2, fillColor: '#4285F4', fillOpacity: 1
       }).addTo(pickerMap);
+      if(btn) btn.classList.remove('locating');
     },
-    () => {}, { timeout: 5000, enableHighAccuracy: true }
+    (err) => {
+      console.warn('Geolocation failed:', err);
+      if(btn) btn.classList.remove('locating');
+    },
+    { timeout: 8000, enableHighAccuracy: true, maximumAge: 10000 }
   );
 }
 function ensurePickerMap(){
