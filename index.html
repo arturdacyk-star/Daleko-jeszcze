@@ -278,6 +278,26 @@
   .tile.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
   .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
+  .car.car-arrived-spin{animation:carArrivalSpin 1.4s cubic-bezier(.34,1.56,.64,1) forwards;}
+  @keyframes carArrivalSpin{
+    0%{transform:scale(1) rotate(0deg) translateY(0);}
+    20%{transform:scale(1.3) rotate(300deg) translateY(-16px);}
+    40%{transform:scale(1.3) rotate(600deg) translateY(-16px);}
+    60%{transform:scale(1.3) rotate(900deg) translateY(-10px);}
+    80%{transform:scale(1.2) rotate(1080deg) translateY(-14px);}
+    100%{transform:scale(1.15) rotate(1080deg) translateY(0);}
+  }
+
+  .confetti-overlay{position:fixed; inset:0; z-index:400; overflow:hidden; cursor:pointer;}
+  .confetti-overlay.hidden{display:none;}
+  .confetti-piece{
+    position:absolute; top:-20px; width:8px; height:14px; opacity:.9;
+    animation-name:confettiFall; animation-timing-function:linear; animation-fill-mode:forwards;
+  }
+  @keyframes confettiFall{
+    0%{transform:translateY(0) rotate(0deg); opacity:1;}
+    100%{transform:translateY(115vh) rotate(600deg); opacity:.9;}
+  }
 
   .row-deco{
     align-self:center; justify-self:center; opacity:.45; line-height:1;
@@ -459,6 +479,8 @@
         <span class="flag">🏁</span><span id="arrivalBannerText"></span><span class="flag">🏁</span>
       </div>
     </div>
+
+    <div class="confetti-overlay hidden" id="confettiOverlay"></div>
 
     <div class="road-wrap" id="roadWrap"></div>
 
@@ -670,6 +692,7 @@ let routePoints = null;
 let routeCumDist = null;
 let usingRoute = false;
 let progressBase = 0; // % locked in at the last route recalculation — never goes down
+let arrivalCelebrated = false; // guards the one-shot confetti/spin so it doesn't replay on every GPS tick
 let maxProgress = 0;
 let boardTileCount = 100; // real number of route tiles on screen, incl. turn tiles
 let watchId = null;
@@ -1121,6 +1144,12 @@ function renderProgress(fraction){
   const currentTile = Math.min(totalTiles, filledTiles + 1);
   const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
   const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
+  // use the same rounded number the person actually sees on screen to decide
+  // "arrived" — comparing an unrounded fraction to a strict 1.0 could show
+  // 100% on screen while still saying "almost there"
+  const displayPercent = Math.round(fraction * 100);
+  const justArrived = displayPercent >= 100 && !arrivalCelebrated;
+  if(displayPercent >= 100) arrivalCelebrated = true;
 
   for(let i = 1; i <= totalTiles; i++){
     const el = $('tile-' + i);
@@ -1130,20 +1159,19 @@ function renderProgress(fraction){
     if(i <= filledTiles) el.classList.add('done');
     else el.classList.remove('done');
   }
-  if(fraction < 1){
-    const cur = $('tile-' + currentTile);
-    if(cur){
-      cur.classList.add('current');
-      const car = document.createElement('span');
-      car.className = 'car';
-      car.style.fontSize = carSize + 'px';
-      car.textContent = theme.vehicle;
-      cur.appendChild(car);
-    }
+  const cur = $('tile-' + currentTile);
+  if(cur){
+    cur.classList.add('current');
+    const car = document.createElement('span');
+    car.className = 'car';
+    if(justArrived) car.classList.add('car-arrived-spin');
+    car.style.fontSize = carSize + 'px';
+    car.textContent = theme.vehicle;
+    cur.appendChild(car);
   }
 
   $('progressFill').style.width = (fraction*100) + '%';
-  $('statPercent').textContent = Math.round(fraction*100) + '%';
+  $('statPercent').textContent = displayPercent + '%';
 
   // totalDistance reflects only the current (possibly recalculated) route
   // segment, so km-remaining must use the sub-fraction within that segment,
@@ -1154,10 +1182,11 @@ function renderProgress(fraction){
 
   const msgEl = $('progressMsg');
   const arrivalEl = $('arrivalBanner');
-  if(fraction >= 1){
+  if(displayPercent >= 100){
     msgEl.textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
     $('arrivalBannerText').textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
     arrivalEl.classList.add('show');
+    if(justArrived) triggerArrivalCelebration();
   } else if(fraction >= 0.9){
     msgEl.textContent = t('msgAlmost') + ' ' + theme.finishIcon;
     arrivalEl.classList.remove('show');
@@ -1172,6 +1201,37 @@ function renderProgress(fraction){
     arrivalEl.classList.remove('show');
   }
 }
+
+/* ---- arrival celebration: confetti (tap anywhere to dismiss early) plus
+   a one-shot spin/hop on the vehicle icon as it lands on the finish tile ---- */
+function spawnConfetti(){
+  const overlay = $('confettiOverlay');
+  overlay.innerHTML = '';
+  const colors = ['#FF6B5B','#FFC93C','#6FCF97','#39B6E0','#9B59B6','#FF9F1C'];
+  const n = 60;
+  for(let i = 0; i < n; i++){
+    const p = document.createElement('span');
+    p.className = 'confetti-piece';
+    p.style.left = (Math.random()*100) + 'vw';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDuration = (2 + Math.random()*1.5) + 's';
+    p.style.animationDelay = (Math.random()*0.6) + 's';
+    overlay.appendChild(p);
+  }
+  overlay.classList.remove('hidden');
+}
+function dismissConfetti(){
+  const overlay = $('confettiOverlay');
+  overlay.classList.add('hidden');
+  overlay.innerHTML = '';
+}
+function triggerArrivalCelebration(){
+  spawnConfetti();
+  clearTimeout(window._confettiAutoTimer);
+  window._confettiAutoTimer = setTimeout(dismissConfetti, 6000);
+}
+$('confettiOverlay').addEventListener('click', dismissConfetti);
+
 
 /* ---------- ROBUST GPS ↔ ROUTE MATCHING ----------
    Zamiast szukać najbliższego POJEDYNCZEGO punktu trasy (co na długich
@@ -1326,7 +1386,7 @@ function acceptProgressFromGps(pos){
     saveTripState();
     $('boardStatus').textContent = '';
     $('boardStatus').classList.remove('error');
-    if(maxProgress >= 1){
+    if(Math.round(maxProgress*100) >= 100){
       stopTracking();
       releaseWakeLock();
       clearTripState();
@@ -1713,6 +1773,7 @@ $('startBtn').addEventListener('click', async () => {
   usingRoute = false;
   routeMeta.segments = null;
   progressBase = 0;
+  arrivalCelebrated = false;
   routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
 
   if(settings.forceStraightLine){
@@ -1802,6 +1863,8 @@ $('resetBtn').addEventListener('click', () => {
   usingRoute = false;
   routeMeta.segments = null;
   progressBase = 0;
+  arrivalCelebrated = false;
+  dismissConfetti();
   routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
   gpsState = {lastAcceptedIndex:0, lastAcceptedProgress:0, lastPosition:null, lastTimestamp:0, pendingJump:null};
   $('destChip').classList.add('hidden');
