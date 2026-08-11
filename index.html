@@ -6,6 +6,8 @@
 <title>Daleko jeszcze? / Are we there yet?</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
 <style>
   :root{
     --sky-top:#8ED0EE;
@@ -26,6 +28,7 @@
     background:linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 45%, var(--sky-bottom) 100%);
     color:var(--ink);
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -104,8 +107,29 @@
     background:none; border:2px solid #D8DEE8; color:#6b7688; font-family:'Baloo 2';
     font-weight:600; border-radius:14px; padding:10px; font-size:14px; cursor:pointer; width:100%;
   }
+  #mapPickBtn{ margin-top: 10px; }
+
   .status-msg{font-size:13px; text-align:center; margin-top:8px; min-height:16px; color:var(--asphalt);}
   .status-msg.error{color:var(--coral); font-weight:700;}
+  .bottom-actions #resetBtn{background:#fff; border:2px solid #C7CEDA; color:var(--ink); box-shadow:0 2px 6px rgba(0,0,0,.08);}
+
+  .map-picker-overlay{
+    position:fixed; inset:0; background:#fff; z-index:1000;
+    display:flex; flex-direction:column;
+  }
+  .map-picker-overlay.hidden{display:none;}
+  .map-picker-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; font-family:'Baloo 2'; font-weight:700; font-size:16px;
+    border-bottom:1px solid #E4E9F0;
+  }
+  .map-picker-header button{
+    background:#F7F9FC; border:2px solid #E4E9F0; border-radius:10px;
+    width:32px; height:32px; font-size:14px; cursor:pointer;
+  }
+  #mapPickerMap{flex:1; min-height:0;}
+  .map-picker-footer{padding:10px 16px 16px; border-top:1px solid #E4E9F0;}
+  .map-picker-name{font-size:13px; color:#5a6478; text-align:center; margin-bottom:8px; min-height:16px;}
 
   .search-row{display:flex; gap:8px;}
   .search-row input{flex:1;}
@@ -138,13 +162,19 @@
   .start-search-area{margin-top:12px;}
   .start-search-area .secondary-btn{margin-top:8px;}
 
-  .theme-preview-row{display:flex; align-items:center; gap:8px; background:#F7F9FC; border:2px solid #E4E9F0; border-radius:12px; padding:10px 12px; margin-bottom:16px; width:100%;}
+  .theme-preview-row{display:none;}
   .theme-preview-row .emoji{font-size:22px;}
   .theme-preview-row .txt{flex:1; font-family:'Baloo 2'; font-weight:600; font-size:14px;}
   .theme-preview-row button{background:none; border:none; color:#6b7688; font-size:12px; text-decoration:underline; cursor:pointer;}
 
-  .options-header{width:100%; display:flex; align-items:center; gap:10px; margin-bottom:18px;}
-  .back-btn{background:rgba(255,255,255,.85); border:none; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(36,48,61,.15);}
+  .options-header{width:100%; display:flex; align-items:center; gap:12px; margin-bottom:18px;}
+  .back-btn{
+    background:#FFFFFF; border:2px solid #E4E9F0; width:42px; height:42px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    box-shadow:0 4px 12px rgba(36,48,61,.08); color:var(--ink); transition:transform .1s ease, background .2s ease;
+  }
+  .back-btn:active{transform:scale(0.92); background:#F7F9FC;}
+  .back-btn svg{width:20px; height:20px; stroke:var(--ink);}
   .options-title{font-family:'Baloo 2'; font-size:22px; font-weight:700;}
 
   .lang-row{display:flex; gap:8px;}
@@ -180,7 +210,7 @@
   .switch input:checked + .slider::before{transform:translateX(20px);}
 
   .screen-board{
-    height:100dvh; height:100vh; padding:10px 14px 12px;
+    height:100vh; height:100dvh; padding:10px 14px 12px;
     overflow:hidden;
   }
   .board-decor{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0;}
@@ -221,16 +251,15 @@
     position:relative;
   }
   .tile{
-    position:relative; border-radius:5px;
+    position:relative; border-radius:6px;
     background:var(--asphalt-light);
     display:flex; align-items:center; justify-content:center;
     transition:background .3s ease, transform .2s ease;
   }
-  .tile.turn{ border-radius:8px; }
   .tile.done{background:var(--grass);}
   .tile.start{background:var(--sun);}
   .tile.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
-  .tile.current{transform:scale(1.25); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
+  .tile.current{transform:scale(1.22); z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile .car{line-height:1;}
 
   .row-deco{
@@ -247,7 +276,7 @@
   .tile-path.done{background:var(--grass);}
   .tile-path.start{background:var(--sun);}
   .tile-path.finish{background:repeating-conic-gradient(#1a1a1a 0% 25%, #fff 0% 50%) 0 0/50% 50%;}
-  .tile-path.current{transform:scale(1.4) !important; z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
+  .tile-path.current{transform:scale(1.35) !important; z-index:2; box-shadow:0 0 0 2px #fff, 0 3px 8px rgba(0,0,0,.35);}
   .tile-path .car{line-height:1;}
 
   .bottom-actions{width:100%; margin-top:8px; flex-shrink:0;}
@@ -319,6 +348,7 @@
       <button class="search-btn" id="searchBtn">Szukaj</button>
     </div>
     <div class="results-list hidden" id="resultsList"></div>
+    <button class="secondary-btn" id="mapPickBtn">📍 <span id="mapPickBtnText">Wskaż punkt na mapie</span></button>
     <div class="dest-chip hidden" id="destChip">
       <div class="icon">📍</div>
       <div class="txt"><b id="destChipName"></b><span id="destChipAddr"></span></div>
@@ -337,7 +367,11 @@
 <!-- OPTIONS SCREEN -->
 <div class="screen hidden" id="optionsScreen">
   <div class="options-header">
-    <button class="back-btn" id="optionsBackBtn">←</button>
+    <button class="back-btn" id="optionsBackBtn" title="Powrót">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+    </button>
     <div class="options-title" id="optionsTitle">Opcje gry</div>
   </div>
 
@@ -357,7 +391,7 @@
 
   <div class="card">
     <h2 id="tileCardTitle">🔢 Liczba pól trasy</h2>
-    <p class="hint" id="tileCardHint">Od 10 (krótka gra) do 1000 (długa trasa). Domyślnie 100.</p>
+    <p class="hint" id="tileCardHint">Od 10 (krótka gra) do 300 (długa trasa). Domyślnie 100.</p>
     <div class="tile-count-row">
       <input type="range" id="tileCountRange" min="10" max="300" step="10" value="100">
       <input type="number" id="tileCountNum" class="tile-count-num" min="10" max="300" value="100">
@@ -416,6 +450,18 @@
   </div>
 </div>
 
+<div class="map-picker-overlay hidden" id="mapPickerOverlay">
+  <div class="map-picker-header">
+    <span id="mapPickerTitle">Wskaż cel na mapie</span>
+    <button id="mapPickerClose">✕</button>
+  </div>
+  <div id="mapPickerMap"></div>
+  <div class="map-picker-footer">
+    <div class="map-picker-name" id="mapPickerName"></div>
+    <button class="primary-btn" id="mapPickerConfirm" disabled>Zatwierdź ten punkt</button>
+  </div>
+</div>
+
 <script>
 /* ---------- TRANSLATIONS ---------- */
 const I18N = {
@@ -443,7 +489,7 @@ const I18N = {
     themeCardTitle:'🎨 Motyw planszy',
     themeCardHint:'Każdy motyw ma inny kształt trasy i inne postacie.',
     tileCardTitle:'🔢 Liczba pól trasy',
-    tileCardHint:'Od 10 (krótka gra) do 1000 (długa trasa). Domyślnie 100.',
+    tileCardHint:'Od 10 (krótka gra) do 300 (długa trasa). Domyślnie 100.',
     tileCountHint2:'Duża liczba pól = mniejsze pola, żeby wszystko zmieściło się na ekranie.',
     straightLineLabel:'📏 Zawsze linia prosta',
     straightLineSub:'Nie licz realnej trasy drogowej, nawet gdy internet działa.',
@@ -479,6 +525,9 @@ const I18N = {
     resumeNew:'Zacznij nową',
     resumeToPrefix:'do', resumeDonePct:'ukończono',
     recentLabel:'Ostatnio wybierane',
+    mapPickBtnText:'Wskaż punkt na mapie',
+    mapPickerTitle:'Wskaż cel na mapie',
+    mapPickerConfirm:'Zatwierdź ten punkt',
     themes:{
       road:{label:'Droga', shape:'siatka wężowa'},
       forest:{label:'Las', shape:'wąska serpentyna'},
@@ -510,7 +559,7 @@ const I18N = {
     themeCardTitle:'🎨 Board theme',
     themeCardHint:'Each theme has a different track shape and characters.',
     tileCardTitle:'🔢 Number of route tiles',
-    tileCardHint:'From 10 (short game) to 1000 (long route). Default is 100.',
+    tileCardHint:'From 10 (short game) to 300 (long route). Default is 100.',
     tileCountHint2:'More tiles = smaller tiles, so everything still fits on screen.',
     straightLineLabel:'📏 Always straight line',
     straightLineSub:"Don't calculate the real road route, even when the internet works.",
@@ -546,6 +595,9 @@ const I18N = {
     resumeNew:'Start new',
     resumeToPrefix:'to', resumeDonePct:'complete',
     recentLabel:'Recently selected',
+    mapPickBtnText:'Pick a point on the map',
+    mapPickerTitle:'Pick a destination on the map',
+    mapPickerConfirm:'Confirm this point',
     themes:{
       road:{label:'Road', shape:'snake grid'},
       forest:{label:'Forest', shape:'narrow switchback'},
@@ -597,6 +649,7 @@ let startLat, startLng, totalDistance;
 let routePoints = null;
 let routeCumDist = null;
 let usingRoute = false;
+let progressBase = 0;
 let maxProgress = 0;
 let watchId = null;
 let resizeTimer = null;
@@ -641,6 +694,7 @@ function showDestHistory(){
 }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
+/* ---------- API LAYER ---------- */
 const API_BASE_URL = '';
 async function apiFetch(path, options = {}){
   if(!API_BASE_URL) throw new Error('BACKEND_NOT_CONFIGURED');
@@ -656,6 +710,7 @@ async function apiFetch(path, options = {}){
   } finally { clearTimeout(timer); }
 }
 
+/* ---------- WAKE LOCK ---------- */
 async function requestWakeLock(){
   try{
     if('wakeLock' in navigator){
@@ -674,12 +729,13 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
+/* ---------- TRIP PERSISTENCE ---------- */
 function saveTripState(){
   try{
     const data = {
       destLat, destLng, destName,
       totalDistance, usingRoute, routePoints, routeCumDist,
-      maxProgress,
+      maxProgress, progressBase,
       theme:settings.theme, tileCount:settings.tileCount,
       forceStraightLine:settings.forceStraightLine, lang:settings.lang,
       savedAt: Date.now()
@@ -723,6 +779,7 @@ function checkForSavedTrip(){
     routePoints = saved.routePoints || null;
     routeCumDist = saved.routeCumDist || null;
     maxProgress = saved.maxProgress || 0;
+    progressBase = saved.progressBase || 0;
 
     routeMeta.segments = null;
     if(usingRoute && routePoints) buildSegmentMeta();
@@ -731,6 +788,7 @@ function checkForSavedTrip(){
       lastAcceptedProgress: maxProgress,
       lastPosition: null, lastTimestamp: 0, pendingJump: null
     };
+    routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
 
     $('resumeBanner').classList.add('hidden');
     $('setupScreen').classList.add('hidden');
@@ -793,6 +851,7 @@ async function fetchRoute(sLat, sLng, dLat, dLng){
   return {points, cum, totalKm: route.distance / 1000};
 }
 
+/* ---------- BOARD BUILDING ---------- */
 function applyThemeVars(theme){
   const root = document.documentElement.style;
   root.setProperty('--sky-top', theme.bgTop);
@@ -804,118 +863,74 @@ function applyThemeVars(theme){
   root.setProperty('--finish', theme.finishColor);
 }
 
+/* POPRAWIONA SIATKA WĘŻOWA (CZYSTE, POJEDYNCZE POLA JAK DAWNY STYL) */
 function buildGridTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-grid';
   wrap.style.display = 'grid';
+
   let cols = Math.max(3, Math.round(Math.sqrt(count * (theme.gridAspectBias || 1))));
   cols = Math.min(cols, count);
+  const rows = Math.ceil(count / cols);
 
-  // Wyliczenie liczby wierszy (zakręty traktowane są jako kafelki w sekwencji)
-  let tempCount = count;
-  let numRows = 0;
-  while(tempCount > 0){
-    numRows++;
-    tempCount -= cols; // kafelki w poziomie
-    if(tempCount > 0){
-      tempCount -= 1;  // kafelek zakrętu
-    }
-  }
+  const colGap = count > 200 ? 2 : count > 80 ? 3 : 5;
+  const rowGap = colGap;
 
-  const colGap = count > 200 ? 1 : count > 80 ? 2 : 4;
-  wrap.style.rowGap = '0px';
-  wrap.style.columnGap = colGap + 'px';
+  wrap.style.gap = `${rowGap}px ${colGap}px`;
   wrap.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  wrap.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
-  const rowTemplate = [];
-  for(let i = 0; i < numRows; i++){
-    rowTemplate.push('1fr');
-    if(i < numRows - 1) rowTemplate.push('1fr');
-  }
-  wrap.style.gridTemplateRows = rowTemplate.join(' ');
+  for(let i = 0; i < count; i++){
+    const row = Math.floor(i / cols);
+    const colInRow = i % cols;
+    const col = (row % 2 === 1) ? (cols - 1 - colInRow) : colInRow;
 
-  let currentTile = 0;
-  let row = 0;
+    const tl = document.createElement('div');
+    tl.className = 'tile';
+    tl.id = 'tile-' + (i+1);
+    tl.style.gridColumn = (col + 1);
+    tl.style.gridRow = (row + 1);
 
-  while(currentTile < count){
-    const gridRowIndex = row * 2 + 1;
-    const isEvenRow = (row % 2 === 0);
-
-    // Kafelki w poziomie
-    for(let c = 0; c < cols && currentTile < count; c++){
-      const col = isEvenRow ? c : (cols - 1 - c);
-      const tl = document.createElement('div');
-      tl.className = 'tile';
-      tl.id = 'tile-' + (currentTile + 1);
-      tl.style.gridColumn = (col + 1);
-      tl.style.gridRow = gridRowIndex;
-
-      if(currentTile === 0) tl.classList.add('start');
-      if(currentTile === count - 1) tl.classList.add('finish');
-
-      wrap.appendChild(tl);
-      currentTile++;
-    }
-
-    // Kafelek na zakręcie (aktywny punkt trasy z id tile-X)
-    if(currentTile < count){
-      const turnCol = isEvenRow ? cols : 1;
-      const turnRowIndex = row * 2 + 2;
-
-      const turnTl = document.createElement('div');
-      turnTl.className = 'tile turn';
-      turnTl.id = 'tile-' + (currentTile + 1);
-      turnTl.style.gridColumn = turnCol;
-      turnTl.style.gridRow = turnRowIndex;
-
-      if(currentTile === count - 1) turnTl.classList.add('finish');
-
-      wrap.appendChild(turnTl);
-      currentTile++;
-
-      if(theme.decor && theme.decor.length && cols > 2){
-        const decorCol = clamp(1 + ((row * 3 + 2) % (cols - 1)), 1, cols);
-        if(decorCol !== turnCol){
-          const deco = document.createElement('span');
-          deco.className = 'row-deco';
-          deco.textContent = theme.decor[row % theme.decor.length].e;
-          const decoSize = Math.max(9, Math.min(18, Math.floor(140 / Math.sqrt(count))));
-          deco.style.fontSize = decoSize + 'px';
-          deco.style.gridColumn = decorCol;
-          deco.style.gridRow = turnRowIndex;
-          deco.style.animationDelay = (row * 0.3) + 's';
-          wrap.appendChild(deco);
-        }
-      }
-    }
-
-    row++;
+    if(i === 0) tl.classList.add('start');
+    if(i === count-1) tl.classList.add('finish');
+    wrap.appendChild(tl);
   }
 }
 
+/* POPRAWIONE DINOZAURY / WODA (BRAK NAKŁADANIA SIĘ KROPEK) */
 function buildPathTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-path';
   wrap.style.display = 'block';
   const W = wrap.clientWidth, H = wrap.clientHeight;
-  const vStep = H / Math.max(1, count - 1);
-  const size = Math.max(5, Math.min(30, Math.floor(Math.min(W / 8, vStep * 0.8))));
-  const usableH = Math.max(1, H - size);
-  const usableW = Math.max(1, W - size);
 
-  const numWaves = clamp(Math.round(count / 30), 2, 6);
-  const freq = numWaves * 2 * Math.PI / Math.max(1, count - 1);
-  const riverAmp = 0.34;
-  const footstepAmp = 0.07;
+  let cols = Math.max(3, Math.round(Math.sqrt(count)));
+  cols = Math.min(cols, count);
+  const rows = Math.ceil(count / cols);
+  const cellW = W / cols;
+  const cellH = H / rows;
+
+  // Rozmiar kropki tak opanowany, aby kropki w sąsiednich wierszach się nie dotykały
+  const size = Math.max(6, Math.min(22, Math.floor(Math.min(cellW, cellH) * 0.50)));
+
+  const waveFreq = (2 * Math.PI * 1.2) / cols;
+  const waveAmp = Math.min(cellH * 0.15, 12);
+  const footstepAmp = Math.min(cellH * 0.06, 6);
 
   const centers = [];
   for(let i = 0; i < count; i++){
-    const frac = count > 1 ? i / (count - 1) : 0;
-    const topPx = frac * usableH + size/2;
-    let xFrac = 0.5 + Math.sin(i * freq) * riverAmp;
+    const row = Math.floor(i / cols);
+    const colInRow = i % cols;
+    const col = (row % 2 === 1) ? (cols - 1 - colInRow) : colInRow;
+
+    let y = (row + 0.5) * cellH + Math.sin(colInRow * waveFreq) * waveAmp;
     if(theme.layout === 'zigzag'){
-      xFrac += (i % 2 === 0 ? -1 : 1) * footstepAmp;
+      y += (i % 2 === 0 ? -1 : 1) * footstepAmp;
     }
-    const leftPx = clamp(xFrac, 0, 1) * usableW + size/2;
-    centers.push([leftPx, topPx]);
+    const x = (col + 0.5) * cellW;
+
+    // Rygorystyczny margines Y w obrębie danego pasma wiersza
+    const minY = row * cellH + size/2 + 2;
+    const maxY = (row + 1) * cellH - size/2 - 2;
+    centers.push([x, clamp(y, minY, maxY)]);
   }
 
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -925,14 +940,15 @@ function buildPathTiles(wrap, theme, count){
   svg.style.position = 'absolute';
   svg.style.inset = '0';
   svg.style.pointerEvents = 'none';
+
   const poly = document.createElementNS(svgNS, 'polyline');
   poly.setAttribute('points', centers.map(c => c[0] + ',' + c[1]).join(' '));
   poly.setAttribute('fill', 'none');
   poly.setAttribute('stroke', theme.trackBgLight);
-  poly.setAttribute('stroke-width', Math.max(2, size * 0.55));
+  poly.setAttribute('stroke-width', Math.max(2, size * 0.45));
   poly.setAttribute('stroke-linecap', 'round');
   poly.setAttribute('stroke-linejoin', 'round');
-  poly.setAttribute('opacity', '0.9');
+  poly.setAttribute('opacity', '0.8');
   svg.appendChild(poly);
   wrap.appendChild(svg);
 
@@ -950,9 +966,9 @@ function buildPathTiles(wrap, theme, count){
   });
 
   if(theme.decor && theme.decor.length){
-    const decorCount = clamp(Math.round(count / 25) * 3, 9, 30);
-    const decorSize = Math.max(10, Math.min(20, Math.floor(size * 1.1)));
-    const offset = size * 1.6 + 6;
+    const decorCount = clamp(Math.round(count / 25) * 3, 6, 20);
+    const decorSize = Math.max(10, Math.min(18, Math.floor(size * 1.1)));
+    const offset = size * 1.4 + 4;
     for(let k = 0; k < decorCount; k++){
       const idx = Math.min(count - 1, Math.floor((k + 0.5) * (count - 1) / decorCount));
       const c = centers[idx];
@@ -1042,7 +1058,8 @@ function renderProgress(fraction){
   $('progressFill').style.width = (fraction*100) + '%';
   $('statPercent').textContent = Math.round(fraction*100) + '%';
 
-  const remainingKm = totalDistance * (1 - fraction);
+  const subFraction = clamp((fraction - progressBase) / Math.max(1e-6, 1 - progressBase), 0, 1);
+  const remainingKm = totalDistance * (1 - subFraction);
   $('statKm').textContent = remainingKm < 10 ? remainingKm.toFixed(1) : Math.round(remainingKm);
 
   const msgEl = $('progressMsg');
@@ -1066,7 +1083,9 @@ function renderProgress(fraction){
   }
 }
 
+/* ---------- GPS LOGIC ---------- */
 let gpsState = {lastAcceptedIndex:0, lastAcceptedProgress:0, lastPosition:null, lastTimestamp:0, pendingJump:null};
+let routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
 let routeMeta = {segments:null};
 
 function projectPointToSegment(lat, lng, a, b){
@@ -1108,7 +1127,6 @@ function projectGpsToRoute(lat, lng, accuracy){
       const along = routeCumDist[i] + p.alongKm;
       let score = p.distanceKm;
       if(gpsState.lastPosition && gpsState.lastTimestamp){
-        const dt = Math.max(0.5, (performance.now() - gpsState.lastTimestamp) / 1000);
         const move = haversine(gpsState.lastPosition.lat, gpsState.lastPosition.lng, lat, lng);
         const gpsBearing = bearing(gpsState.lastPosition.lat, gpsState.lastPosition.lng, lat, lng);
         const hd = angleDiff(gpsBearing, s.heading);
@@ -1126,7 +1144,8 @@ function projectGpsToRoute(lat, lng, accuracy){
 
 function indexForProgress(fraction){
   if(!usingRoute || !routeCumDist) return 0;
-  const targetKm = fraction * totalDistance;
+  const subFraction = clamp((fraction - progressBase) / Math.max(1e-6, 1 - progressBase), 0, 1);
+  const targetKm = subFraction * totalDistance;
   let idx = 0;
   for(let i = 0; i < routeCumDist.length; i++){
     if(routeCumDist[i] >= targetKm) { idx = i; break; }
@@ -1138,18 +1157,22 @@ function indexForProgress(fraction){
 function acceptProgressFromGps(pos){
   const {latitude:lat, longitude:lng, accuracy = 30} = pos.coords;
   if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  const now = performance.now();
 
   const match = usingRoute ? projectGpsToRoute(lat, lng, accuracy) : null;
   let fraction, matchedIndex = 0;
 
   if(usingRoute && match){
-    fraction = match.alongKm / totalDistance;
+    fraction = progressBase + (1 - progressBase) * (match.alongKm / totalDistance);
     matchedIndex = match.index;
-    if(match.distanceKm > Math.max(0.12, accuracy/1000*4)){
+    const offRouteThreshold = Math.max(0.12, accuracy/1000*4);
+    if(match.distanceKm > offRouteThreshold){
+      handlePossibleDeviation(lat, lng, accuracy, match, now);
       $('boardStatus').textContent = t('gpsWeak');
       $('boardStatus').classList.remove('error');
       return;
     }
+    routeRecalc.active = false;
   } else {
     const remaining = haversine(lat, lng, destLat, destLng);
     fraction = (totalDistance - remaining) / totalDistance;
@@ -1165,7 +1188,6 @@ function acceptProgressFromGps(pos){
   }
 
   const jump = fraction - gpsState.lastAcceptedProgress;
-  const now = performance.now();
   const previous = gpsState.lastPosition;
   const elapsed = Math.max(0.5, (now - gpsState.lastTimestamp) / 1000);
   const physicalMove = previous ? haversine(previous.lat, previous.lng, lat, lng) : 0;
@@ -1197,6 +1219,48 @@ function acceptProgressFromGps(pos){
       releaseWakeLock();
       clearTripState();
     }
+  }
+}
+
+function handlePossibleDeviation(lat, lng, accuracy, match, now){
+  const deviationThreshold = Math.max(0.45, (accuracy || 30) / 1000 * 6);
+  if(match.distanceKm <= deviationThreshold){
+    routeRecalc.active = false;
+    return;
+  }
+  if(!routeRecalc.active){
+    routeRecalc.active = true;
+    routeRecalc.startTime = now;
+    routeRecalc.startPos = {lat, lng};
+    return;
+  }
+  const elapsedSec = (now - routeRecalc.startTime) / 1000;
+  const movedKm = haversine(routeRecalc.startPos.lat, routeRecalc.startPos.lng, lat, lng);
+  const cooldownOk = (now - routeRecalc.lastRecalcAt) > 150000;
+  if(elapsedSec >= 50 && movedKm >= 0.25 && cooldownOk && !routeRecalc.pending){
+    routeRecalc.pending = true;
+    routeRecalc.lastRecalcAt = now;
+    recalcRouteFromCurrentPosition(lat, lng);
+  }
+}
+
+async function recalcRouteFromCurrentPosition(lat, lng){
+  try{
+    const newRoute = await fetchRoute(lat, lng, destLat, destLng);
+    progressBase = maxProgress;
+    routePoints = newRoute.points;
+    routeCumDist = newRoute.cum;
+    totalDistance = newRoute.totalKm;
+    routeMeta.segments = null;
+    buildSegmentMeta();
+    gpsState.lastAcceptedIndex = 0;
+    gpsState.pendingJump = null;
+    routeRecalc.active = false;
+    saveTripState();
+  } catch(e){
+    console.warn('Route recalculation failed:', e);
+  } finally {
+    routeRecalc.pending = false;
   }
 }
 
@@ -1273,6 +1337,7 @@ function renderGenericResults(listEl, results, statusEl, onPick){
   listEl.classList.remove('hidden');
 }
 
+/* ---- destination search ---- */
 function selectDestination(r){
   destLat = parseFloat(r.lat);
   destLng = parseFloat(r.lon);
@@ -1319,6 +1384,95 @@ $('destAddress').addEventListener('input', () => {
   else { $('resultsList').classList.add('hidden'); $('resultsList').innerHTML = ''; }
 });
 
+/* ---- MAP PICKER (Z POPRAWIONYM LOKALIZOWANIEM MOJEJ POZYCJI) ---- */
+let pickerMap = null, pickerMarker = null, pickerLatLng = null;
+
+function ensurePickerMap(){
+  if(!pickerMap){
+    pickerMap = L.map('mapPickerMap', { zoomControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(pickerMap);
+
+    // Przycisk "Moja pozycja" na mapie
+    const locateBtn = L.control({position: 'topright'});
+    locateBtn.onAdd = function() {
+      const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      div.innerHTML = '<a href="#" title="Moja lokalizacja" style="font-size:18px; line-height:30px; text-align:center; display:block; width:30px; height:30px; background:#fff; text-decoration:none; color:#333;">🎯</a>';
+      div.onclick = function(e) {
+        e.preventDefault();
+        centerPickerOnGps();
+      };
+      return div;
+    };
+    locateBtn.addTo(pickerMap);
+
+    pickerMap.on('click', async (e) => {
+      pickerLatLng = e.latlng;
+      if(pickerMarker) pickerMarker.setLatLng(e.latlng);
+      else pickerMarker = L.marker(e.latlng).addTo(pickerMap);
+      $('mapPickerConfirm').disabled = false;
+      $('mapPickerName').textContent = t('searching');
+      try{
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=json&accept-language=' + settings.lang
+          + '&lat=' + e.latlng.lat + '&lon=' + e.latlng.lng;
+        const res = await fetch(url, {headers:{'Accept':'application/json'}});
+        const data = await res.json();
+        $('mapPickerName').textContent = data.display_name || (e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
+      } catch(err){
+        $('mapPickerName').textContent = e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5);
+      }
+    });
+  }
+
+  centerPickerOnGps();
+}
+
+function centerPickerOnGps(){
+  if(!pickerMap) return;
+
+  // Domyślny punkt startowy jeśli GPS jeszcze nie odpowiedział
+  if(startCustomLat && startCustomLng){
+    pickerMap.setView([startCustomLat, startCustomLng], 14);
+  } else if(destLat && destLng){
+    pickerMap.setView([destLat, destLng], 14);
+  } else {
+    pickerMap.setView([52.0, 19.0], 6);
+  }
+
+  // Odczytaj GPS i natychmiast wyśrodkuj z odpowiednim przybliżeniem (zoom 14)
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        if(pickerMap){
+          pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
+        }
+      },
+      err => console.warn('Błąd wyznaczenia pozycji w mapie:', err),
+      { timeout: 5000, enableHighAccuracy: true }
+    );
+  }
+}
+
+$('mapPickBtn').addEventListener('click', () => {
+  $('mapPickerOverlay').classList.remove('hidden');
+  ensurePickerMap();
+  setTimeout(() => pickerMap && pickerMap.invalidateSize(), 100);
+});
+$('mapPickerClose').addEventListener('click', () => {
+  $('mapPickerOverlay').classList.add('hidden');
+});
+$('mapPickerConfirm').addEventListener('click', () => {
+  if(!pickerLatLng) return;
+  const nameText = $('mapPickerName').textContent || (pickerLatLng.lat.toFixed(5) + ', ' + pickerLatLng.lng.toFixed(5));
+  selectDestination({
+    lat: pickerLatLng.lat, lon: pickerLatLng.lng,
+    shortName: nameText.split(',')[0], fullName: nameText
+  });
+  $('mapPickerOverlay').classList.add('hidden');
+});
+
+/* ---- start point ---- */
 function selectStartPoint(r){
   startMode = 'custom';
   startCustomLat = parseFloat(r.lat);
@@ -1400,6 +1554,8 @@ $('startBtn').addEventListener('click', async () => {
   routeCumDist = null;
   usingRoute = false;
   routeMeta.segments = null;
+  progressBase = 0;
+  routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
 
   if(settings.forceStraightLine){
     totalDistance = haversine(startLat, startLng, destLat, destLng);
@@ -1462,6 +1618,8 @@ $('resetBtn').addEventListener('click', () => {
   routeCumDist = null;
   usingRoute = false;
   routeMeta.segments = null;
+  progressBase = 0;
+  routeRecalc = {active:false, startTime:0, startPos:null, lastRecalcAt:0, pending:false};
   gpsState = {lastAcceptedIndex:0, lastAcceptedProgress:0, lastPosition:null, lastTimestamp:0, pendingJump:null};
   $('destChip').classList.add('hidden');
   $('destAddress').value = '';
@@ -1474,6 +1632,7 @@ $('resetBtn').addEventListener('click', () => {
   $('boardStatus').textContent = '';
 });
 
+/* ---------- OPTIONS / THEME / LANGUAGE UI ---------- */
 function updateThemePreview(){
   const th = activeThemeInfo();
   $('themePreviewEmoji').textContent = th.emoji;
@@ -1518,6 +1677,9 @@ function applyStaticTexts(){
   $('destAddressLabel').textContent = t('destAddressLabel');
   $('destAddress').placeholder = t('destAddressPlaceholder');
   $('searchBtn').textContent = t('searchBtn');
+  $('mapPickBtnText').textContent = t('mapPickBtnText');
+  $('mapPickerTitle').textContent = t('mapPickerTitle');
+  $('mapPickerConfirm').textContent = t('mapPickerConfirm');
   $('destClearBtn').textContent = t('change');
   $('startBtn').textContent = t('startBtn');
   $('setupFooterNote').textContent = t('setupFooterNote');
