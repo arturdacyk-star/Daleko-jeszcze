@@ -295,15 +295,6 @@
 <!-- SETUP SCREEN -->
 <div class="screen" id="setupScreen">
 
-  <div class="resume-banner hidden" id="resumeBanner">
-    <div class="rb-title" id="resumeTitle">▶️ Masz zapisaną podróż</div>
-    <div class="rb-text" id="resumeText"></div>
-    <div class="rb-btns">
-      <button class="rb-continue" id="resumeContinueBtn">Kontynuuj</button>
-      <button class="rb-dismiss" id="resumeDismissBtn">Zacznij nową</button>
-    </div>
-  </div>
-
   <div class="top-row">
     <div class="badge" id="badgeText">🚗 GRA W PODRÓŻ</div>
     <div class="top-right-btns">
@@ -314,12 +305,22 @@
   <div class="title" id="titleText">Daleko <span>jeszcze?</span></div>
   <div class="subtitle" id="subtitleText">Ustaw cel podróży, a droga zamieni się w planszę — pole po polu, aż dojedziecie.</div>
 
+  <div class="resume-banner hidden" id="resumeBanner">
+    <div class="rb-title" id="resumeTitle">▶️ Masz zapisaną podróż</div>
+    <div class="rb-text" id="resumeText"></div>
+    <div class="rb-btns">
+      <button class="rb-continue" id="resumeContinueBtn">Kontynuuj</button>
+      <button class="rb-dismiss" id="resumeDismissBtn">Zacznij nową</button>
+    </div>
+  </div>
+
   <div class="theme-preview-row" id="themePreviewRow">
     <div class="emoji" id="themePreviewEmoji">🚦</div>
     <div class="txt" id="themePreviewText">Motyw: Droga · 100 pól</div>
     <button id="themePreviewEdit">zmień</button>
   </div>
 
+  <div id="setupFormArea">
   <div class="card">
     <h2 id="startCardTitle">🚦 Skąd startujemy?</h2>
     <p class="hint" id="startCardHint">Domyślnie Twoja aktualna lokalizacja — możesz ją zmienić na dowolny adres.</p>
@@ -361,6 +362,7 @@
   <footer class="note" id="setupFooterNote">
     Aplikacja użyje Twojej obecnej pozycji GPS jako punktu startowego i policzy trasę do celu.
   </footer>
+  </div>
 </div>
 
 <!-- OPTIONS SCREEN -->
@@ -768,6 +770,7 @@ function checkForSavedTrip(){
   $('resumeContinueBtn').textContent = I18N[lang].resumeContinue;
   $('resumeDismissBtn').textContent = I18N[lang].resumeNew;
   $('resumeBanner').classList.remove('hidden');
+  $('setupFormArea').classList.add('hidden');
 
   $('resumeContinueBtn').onclick = () => {
     settings.theme = saved.theme || 'road';
@@ -810,6 +813,7 @@ function checkForSavedTrip(){
   $('resumeDismissBtn').onclick = () => {
     clearTripState();
     $('resumeBanner').classList.add('hidden');
+    $('setupFormArea').classList.remove('hidden');
   };
 }
 
@@ -1687,6 +1691,8 @@ $('resetBtn').addEventListener('click', () => {
   $('startBtn').disabled = true;
   $('boardScreen').classList.add('hidden');
   $('setupScreen').classList.remove('hidden');
+  $('resumeBanner').classList.add('hidden');
+  $('setupFormArea').classList.remove('hidden');
   $('setupStatus').textContent = '';
   $('boardStatus').textContent = '';
 });
