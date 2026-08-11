@@ -1139,17 +1139,34 @@ function renderProgress(fraction){
   fraction = Math.max(0, Math.min(1, fraction));
   const theme = activeThemeInfo();
   const count = settings.tileCount;
-  const totalTiles = boardTileCount || count;
-  const filledTiles = Math.floor(fraction * totalTiles);
-  const currentTile = Math.min(totalTiles, filledTiles + 1);
-  const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
-  const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
   // use the same rounded number the person actually sees on screen to decide
   // "arrived" — comparing an unrounded fraction to a strict 1.0 could show
   // 100% on screen while still saying "almost there"
   const displayPercent = Math.round(fraction * 100);
   const justArrived = displayPercent >= 100 && !arrivalCelebrated;
   if(displayPercent >= 100) arrivalCelebrated = true;
+
+  // show/hide the arrival banner FIRST — it changes how much vertical space
+  // the board itself has (flex layout), so if it's about to appear we need
+  // to rebuild the board against the new, smaller size before placing any
+  // tiles, or the bottom rows end up positioned below the visible area
+  const arrivalEl = $('arrivalBanner');
+  const bannerWasShown = arrivalEl.classList.contains('show');
+  if(displayPercent >= 100){
+    $('arrivalBannerText').textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
+    arrivalEl.classList.add('show');
+  } else {
+    arrivalEl.classList.remove('show');
+  }
+  if(arrivalEl.classList.contains('show') !== bannerWasShown){
+    buildBoard();
+  }
+
+  const totalTiles = boardTileCount || count;
+  const filledTiles = Math.floor(fraction * totalTiles);
+  const currentTile = Math.min(totalTiles, filledTiles + 1);
+  const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
+  const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
 
   for(let i = 1; i <= totalTiles; i++){
     const el = $('tile-' + i);
@@ -1181,24 +1198,17 @@ function renderProgress(fraction){
   $('statKm').textContent = remainingKm < 10 ? remainingKm.toFixed(1) : Math.round(remainingKm);
 
   const msgEl = $('progressMsg');
-  const arrivalEl = $('arrivalBanner');
   if(displayPercent >= 100){
     msgEl.textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
-    $('arrivalBannerText').textContent = t('msgDone') + (destName ? ' ' + t('msgDoneTo') + ' ' + destName : '') + '!';
-    arrivalEl.classList.add('show');
     if(justArrived) triggerArrivalCelebration();
   } else if(fraction >= 0.9){
     msgEl.textContent = t('msgAlmost') + ' ' + theme.finishIcon;
-    arrivalEl.classList.remove('show');
   } else if(fraction >= 0.5){
     msgEl.textContent = t('msgHalf');
-    arrivalEl.classList.remove('show');
   } else if(fraction >= 0.1){
     msgEl.textContent = t('msgGo') + ' ' + theme.vehicle;
-    arrivalEl.classList.remove('show');
   } else {
     msgEl.textContent = t('msgStart') + ' ' + theme.startIcon;
-    arrivalEl.classList.remove('show');
   }
 }
 
