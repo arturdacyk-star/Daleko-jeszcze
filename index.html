@@ -127,7 +127,31 @@
     background:#F7F9FC; border:2px solid #E4E9F0; border-radius:10px;
     width:32px; height:32px; font-size:14px; cursor:pointer;
   }
-  #mapPickerMap{flex:1; min-height:0;}
+  .map-container-wrap{
+    position:relative; flex:1; min-height:0; width:100%;
+  }
+  #mapPickerMap{width:100%; height:100%;}
+  .map-recenter-btn{
+    position:absolute; bottom:16px; right:16px; z-index:1000;
+    background:#ffffff; border:2px solid #E4E9F0; border-radius:50%;
+    width:44px; height:44px; font-size:20px; cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,0.18); display:flex; align-items:center; justify-content:center;
+    transition:transform 0.1s ease, background 0.2s ease;
+  }
+  .map-recenter-btn:active{transform:scale(0.92); background:#F0F4F8;}
+
+  .user-gps-marker{background:transparent; border:none;}
+  .user-gps-dot{
+    width:18px; height:18px; background:#2A85FF; border:3px solid #FFFFFF;
+    border-radius:50%; box-shadow:0 0 10px rgba(42, 133, 255, 0.9);
+    animation:pulseGps 2s infinite;
+  }
+  @keyframes pulseGps {
+    0% { box-shadow:0 0 0 0 rgba(42, 133, 255, 0.7); }
+    70% { box-shadow:0 0 0 10px rgba(42, 133, 255, 0); }
+    100% { box-shadow:0 0 0 0 rgba(42, 133, 255, 0); }
+  }
+
   .map-picker-footer{padding:10px 16px 16px; border-top:1px solid #E4E9F0;}
   .map-picker-name{font-size:13px; color:#5a6478; text-align:center; margin-bottom:8px; min-height:16px;}
 
@@ -451,12 +475,16 @@
   </div>
 </div>
 
+<!-- MAP PICKER OVERLAY -->
 <div class="map-picker-overlay hidden" id="mapPickerOverlay">
   <div class="map-picker-header">
     <span id="mapPickerTitle">Wskaż cel na mapie</span>
     <button id="mapPickerClose">✕</button>
   </div>
-  <div id="mapPickerMap"></div>
+  <div class="map-container-wrap">
+    <div id="mapPickerMap"></div>
+    <button class="map-recenter-btn" id="mapRecenterBtn" title="Moja lokalizacja">🎯</button>
+  </div>
   <div class="map-picker-footer">
     <div class="map-picker-name" id="mapPickerName"></div>
     <button class="primary-btn" id="mapPickerConfirm" disabled>Zatwierdź ten punkt</button>
@@ -529,9 +557,10 @@ const I18N = {
     mapPickBtnText:'Wskaż punkt na mapie',
     mapPickerTitle:'Wskaż cel na mapie',
     mapPickerConfirm:'Zatwierdź ten punkt',
+    yourLocation:'Twoja lokalizacja',
     themes:{
       road:{label:'Droga', shape:'siatka wężowa'},
-      forest:{label:'Las', shape:'wąska serpentyna'},
+      forest:{label:'Las', shape:'siatka wężowa'},
       water:{label:'Woda', shape:'meandrująca rzeka'},
       dino:{label:'Dinozaury', shape:'trop dinozaura'}
     }
@@ -599,9 +628,10 @@ const I18N = {
     mapPickBtnText:'Pick a point on the map',
     mapPickerTitle:'Pick a destination on the map',
     mapPickerConfirm:'Confirm this point',
+    yourLocation:'Your location',
     themes:{
       road:{label:'Road', shape:'snake grid'},
-      forest:{label:'Forest', shape:'narrow switchback'},
+      forest:{label:'Forest', shape:'snake grid'},
       water:{label:'Water', shape:'meandering river'},
       dino:{label:'Dinosaurs', shape:'dino footprints'}
     }
@@ -609,12 +639,12 @@ const I18N = {
 };
 
 const THEME_STYLE = {
-  road:  { emoji:'🚦', layout:'grid', gridAspectBias:1,
+  road:  { emoji:'🚦', layout:'grid',
     bgTop:'#8ED0EE', bgBottom:'#E8F7FF', trackBg:'#3A3F4B', trackBgLight:'#4B5160',
     tileDone:'#6FCF97', startColor:'#FFC93C', finishColor:'#FF6B5B',
     vehicle:'🚗', startIcon:'🚦', finishIcon:'🏁',
     decor:[{e:'☁️',a:'bob'},{e:'🐦',a:'swim'},{e:'☁️',a:'bob'},{e:'🌤️',a:'bob'}] },
-  forest:{ emoji:'🌲', layout:'grid', gridAspectBias:0.6,
+  forest:{ emoji:'🌲', layout:'grid',
     bgTop:'#BFE6C4', bgBottom:'#EAF7EA', trackBg:'#5B4632', trackBgLight:'#6E5940',
     tileDone:'#8BC34A', startColor:'#FFD54F', finishColor:'#795548',
     vehicle:'🦊', startIcon:'🌳', finishIcon:'🏕️',
@@ -865,7 +895,7 @@ function buildGridTiles(wrap, theme, count){
   wrap.className = 'road-wrap layout-grid';
   wrap.style.display = 'grid';
 
-  let cols = Math.max(3, Math.round(Math.sqrt(count * (theme.gridAspectBias || 1))));
+  let cols = Math.max(3, Math.round(Math.sqrt(count)));
   cols = Math.min(cols, count);
   const rows = Math.ceil(count / cols);
   const colGap = count > 200 ? 1 : count > 80 ? 2 : 4;
@@ -902,7 +932,6 @@ function buildPathTiles(wrap, theme, count){
   const cellW = W / cols;
   const cellH = H / rows;
 
-  // Reduced tile size ratio to ensure dots never collide vertically or horizontally
   const size = Math.max(5, Math.min(26, Math.floor(Math.min(cellW, cellH) * 0.48)));
 
   const waveFreq = (2 * Math.PI * 1.2) / cols;
@@ -1374,15 +1403,36 @@ $('destAddress').addEventListener('input', () => {
   else { $('resultsList').classList.add('hidden'); $('resultsList').innerHTML = ''; }
 });
 
-/* ---- map picker (now immediately centers on user GPS with zoom 14) ---- */
+/* ---- MAP PICKER WITH USER GPS PIN & RECENTER BUTTON ---- */
 let pickerMap = null, pickerMarker = null, pickerLatLng = null;
+let pickerUserLatLng = null, userMarker = null;
 
-function centerPickerOnUser(){
+function updateUserMarker(lat, lng){
+  if(!pickerMap) return;
+  pickerUserLatLng = [lat, lng];
+  const blueDotIcon = L.divIcon({
+    className: 'user-gps-marker',
+    html: '<div class="user-gps-dot"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9]
+  });
+  if(userMarker){
+    userMarker.setLatLng(pickerUserLatLng);
+  } else {
+    userMarker = L.marker(pickerUserLatLng, { icon: blueDotIcon, zIndexOffset: 1000 }).addTo(pickerMap);
+    userMarker.bindTooltip(t('yourLocation'), { permanent: false, direction: 'top' });
+  }
+}
+
+function centerPickerOnUser(zoomIn = false){
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
       pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        updateUserMarker(lat, lng);
         if(pickerMap){
-          pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
+          pickerMap.setView([lat, lng], zoomIn ? 15 : 14, { animate: true });
         }
       },
       err => { console.warn('Picker GPS fallback', err); },
@@ -1417,6 +1467,13 @@ function ensurePickerMap(){
   }
   centerPickerOnUser();
 }
+
+$('mapRecenterBtn').addEventListener('click', () => {
+  if(pickerUserLatLng && pickerMap){
+    pickerMap.setView(pickerUserLatLng, 15, { animate: true });
+  }
+  centerPickerOnUser(true);
+});
 
 $('mapPickBtn').addEventListener('click', () => {
   $('mapPickerOverlay').classList.remove('hidden');
