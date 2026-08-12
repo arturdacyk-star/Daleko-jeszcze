@@ -144,7 +144,14 @@
   }
   .search-btn:disabled{opacity:.5;}
 
-  .results-list{margin-top:12px; display:flex; flex-direction:column; gap:6px;}
+  .search-wrap{position:relative;}
+  .results-list{
+    position:absolute; top:calc(100% + 8px); left:0; right:0; z-index:50;
+    background:var(--paper); border-radius:14px; padding:8px;
+    box-shadow:0 12px 28px rgba(36,48,61,.22);
+    max-height:260px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:6px;
+  }
   .result-item{
     text-align:left; width:100%; border:2px solid #E4E9F0; background:#F7F9FC;
     border-radius:12px; padding:10px 12px; font-family:'Nunito'; font-size:13px;
@@ -361,31 +368,33 @@
   <div id="setupFormArea">
   <div class="card">
     <h2 id="startCardTitle">🚦 Skąd startujemy?</h2>
-    <p class="hint" id="startCardHint">Domyślnie Twoja aktualna lokalizacja — możesz ją zmienić na dowolny adres.</p>
     <div class="start-current-row" id="startCurrentRow">
       <div class="icon">📍</div>
       <div class="txt" id="startCurrentText">Twoja aktualna lokalizacja</div>
       <button id="startChangeBtn">zmień</button>
     </div>
     <div class="start-search-area hidden" id="startSearchArea">
-      <div class="search-row">
-        <input type="text" id="startAddress" placeholder="np. Dom, ul. Kwiatowa 5">
-        <button class="search-btn" id="startSearchBtn">Szukaj</button>
+      <div class="search-wrap">
+        <div class="search-row">
+          <input type="text" id="startAddress" placeholder="np. Dom, ul. Kwiatowa 5">
+          <button class="search-btn" id="startSearchBtn">Szukaj</button>
+        </div>
+        <div class="results-list hidden" id="startResultsList"></div>
       </div>
-      <div class="results-list hidden" id="startResultsList"></div>
       <button class="secondary-btn" id="startUseGpsBtn">📍 Użyj aktualnej lokalizacji</button>
     </div>
   </div>
 
   <div class="card">
     <h2 id="destCardTitle">🎯 Dokąd jedziemy?</h2>
-    <p class="hint" id="destCardHint">Wpisz adres, miejscowość albo nazwę miejsca — tak jak w Mapach Google.</p>
     <label for="destAddress" id="destAddressLabel">Adres celu</label>
-    <div class="search-row">
-      <input type="text" id="destAddress" placeholder="np. Zakopane, Krupówki 10">
-      <button class="search-btn" id="searchBtn">Szukaj</button>
+    <div class="search-wrap">
+      <div class="search-row">
+        <input type="text" id="destAddress" placeholder="np. Zakopane, Krupówki 10">
+        <button class="search-btn" id="searchBtn">Szukaj</button>
+      </div>
+      <div class="results-list hidden" id="resultsList"></div>
     </div>
-    <div class="results-list hidden" id="resultsList"></div>
     <button class="secondary-btn" id="mapPickBtn" style="margin-top:8px;">📍 <span id="mapPickBtnText">Wskaż punkt na mapie</span></button>
     <div class="dest-chip hidden" id="destChip">
       <div class="icon">📍</div>
@@ -409,7 +418,7 @@
     <button class="back-btn" id="optionsBackBtn" aria-label="Wróć">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <div class="options-title" id="optionsTitle">Opcje gry</div>
+    <div class="options-title" id="optionsTitle">Opcje</div>
   </div>
 
   <div class="card">
@@ -433,7 +442,6 @@
       <input type="range" id="tileCountRange" min="10" max="300" step="10" value="100">
       <input type="number" id="tileCountNum" class="tile-count-num" min="10" max="300" value="100">
     </div>
-    <div class="tile-count-hint" id="tileCountHint2">Duża liczba pól = mniejsze pola, żeby wszystko zmieściło się na ekranie.</div>
   </div>
 
   <div class="card">
@@ -514,25 +522,22 @@ const I18N = {
     themePrefix:'Motyw:', tilesSuffix:'pól', straightSuffix:'linia prosta',
     change:'zmień',
     startCardTitle:'🚦 Skąd startujemy?',
-    startCardHint:'Domyślnie Twoja aktualna lokalizacja — możesz ją zmienić na dowolny adres.',
     startCurrentGps:'Twoja aktualna lokalizacja',
     startUseGps:'📍 Użyj aktualnej lokalizacji',
     startAddressPlaceholder:'np. Dom, ul. Kwiatowa 5',
     destCardTitle:'🎯 Dokąd jedziemy?',
-    destCardHint:'Wpisz adres, miejscowość albo nazwę miejsca — tak jak w Mapach Google.',
     destAddressLabel:'Adres celu',
     destAddressPlaceholder:'np. Zakopane, Krupówki 10',
     searchBtn:'Szukaj',
     startBtn:'Ustal start i jedziemy! 🚦',
     setupFooterNote:'Aplikacja użyje wybranego punktu startowego i policzy trasę do celu.',
-    optionsTitle:'Opcje gry',
+    optionsTitle:'Opcje',
     langCardTitle:'🌐 Język',
     langPl:'Polski', langEn:'English',
     themeCardTitle:'🎨 Motyw planszy',
     themeCardHint:'Każdy motyw ma inny kształt trasy i inne postacie.',
     tileCardTitle:'🔢 Liczba pól trasy',
     tileCardHint:'Od 10 (krótka gra) do 300 (długa trasa). Domyślnie 100.',
-    tileCountHint2:'Duża liczba pól = mniejsze pola, żeby wszystko zmieściło się na ekranie.',
     straightLineLabel:'📏 Zawsze linia prosta',
     straightLineSub:'Nie licz realnej trasy drogowej, nawet gdy internet działa.',
     optionsDoneBtn:'Gotowe',
@@ -584,25 +589,22 @@ const I18N = {
     themePrefix:'Theme:', tilesSuffix:'tiles', straightSuffix:'straight line',
     change:'change',
     startCardTitle:'🚦 Where are we starting from?',
-    startCardHint:'Defaults to your current location — you can change it to any address.',
     startCurrentGps:'Your current location',
     startUseGps:'📍 Use current location',
     startAddressPlaceholder:'e.g. Home, Main Street 5',
     destCardTitle:'🎯 Where are we going?',
-    destCardHint:'Type an address, town or place name — just like in Google Maps.',
     destAddressLabel:'Destination address',
     destAddressPlaceholder:'e.g. Central Park, New York',
     searchBtn:'Search',
     startBtn:"Set start and let's go! 🚦",
     setupFooterNote:'The app will use the chosen starting point and calculate the route to your destination.',
-    optionsTitle:'Game options',
+    optionsTitle:'Options',
     langCardTitle:'🌐 Language',
     langPl:'Polski', langEn:'English',
     themeCardTitle:'🎨 Board theme',
     themeCardHint:'Each theme has a different track shape and characters.',
     tileCardTitle:'🔢 Number of route tiles',
     tileCardHint:'From 10 (short game) to 300 (long route). Default is 100.',
-    tileCountHint2:'More tiles = smaller tiles, so everything still fits on screen.',
     straightLineLabel:'📏 Always straight line',
     straightLineSub:"Don't calculate the real road route, even when the internet works.",
     optionsDoneBtn:'Done',
@@ -1923,7 +1925,6 @@ function applyStaticTexts(){
   $('themePreviewEdit').textContent = t('change');
 
   $('startCardTitle').textContent = t('startCardTitle');
-  $('startCardHint').textContent = t('startCardHint');
   if(startMode === 'gps') $('startCurrentText').textContent = t('startCurrentGps');
   $('startChangeBtn').textContent = t('change');
   $('startAddress').placeholder = t('startAddressPlaceholder');
@@ -1931,7 +1932,6 @@ function applyStaticTexts(){
   $('startUseGpsBtn').textContent = t('startUseGps');
 
   $('destCardTitle').textContent = t('destCardTitle');
-  $('destCardHint').textContent = t('destCardHint');
   $('destAddressLabel').textContent = t('destAddressLabel');
   $('destAddress').placeholder = t('destAddressPlaceholder');
   $('searchBtn').textContent = t('searchBtn');
@@ -1950,7 +1950,6 @@ function applyStaticTexts(){
   $('themeCardHint').textContent = t('themeCardHint');
   $('tileCardTitle').textContent = t('tileCardTitle');
   $('tileCardHint').textContent = t('tileCardHint');
-  $('tileCountHint2').textContent = t('tileCountHint2');
   $('straightLineLabel').textContent = t('straightLineLabel');
   $('straightLineSub').textContent = t('straightLineSub');
   $('optionsDoneBtn').textContent = t('optionsDoneBtn');
