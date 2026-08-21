@@ -118,6 +118,11 @@
   .history-scroll-box{
     flex:1; max-height:172px; overflow-y:auto;
     display:flex; flex-direction:column; gap:6px;
+    /* on mobile, scrolling to the top/bottom edge of this list would
+       otherwise "hand off" the remaining touch-scroll to the page behind
+       it (scroll chaining) — contain stops that handoff so only this list
+       scrolls, not the whole screen underneath */
+    overscroll-behavior: contain;
   }
   .history-vslider-wrap{width:28px; display:flex; align-items:center; justify-content:center; overflow:hidden;}
   .history-vslider{
@@ -761,6 +766,11 @@ let startMode = 'gps'; // 'gps' | 'custom'
 let startCustomLat, startCustomLng, startCustomName;
 let startLat, startLng, totalDistance, originalTotalDistance;
 let routePoints = null;
+// geometry of route already driven BEFORE each recalculation — accumulated
+// across recalcs (never discarded) so the map can keep showing the whole
+// trip's traveled portion in green even after the active route underneath
+// it changes; see recalcRouteFromCurrentPosition and renderRouteMap
+let completedRoutePoints = [];
 let routeCumDist = null;
 let usingRoute = false;
 let progressBase = 0; // % locked in at the last route recalculation — never goes down
@@ -916,7 +926,8 @@ function saveTripState(){
   try{
     const data = {
       destLat, destLng, destName,
-      totalDistance, originalTotalDistance, usingRoute, routePoints, routeCumDist,
+      startLat, startLng,
+      totalDistance, originalTotalDistance, usingRoute, routePoints, routeCumDist, completedRoutePoints,
       maxProgress, progressBase,
       theme:settings.theme, tileCount:settings.tileCount,
       forceStraightLine:settings.forceStraightLine, lang:settings.lang,
@@ -957,11 +968,13 @@ function checkForSavedTrip(){
     setLang(lang);
 
     destLat = saved.destLat; destLng = saved.destLng; destName = saved.destName;
+    startLat = saved.startLat; startLng = saved.startLng;
     totalDistance = saved.totalDistance;
     originalTotalDistance = saved.originalTotalDistance || saved.totalDistance;
     usingRoute = !!saved.usingRoute;
     routePoints = saved.routePoints || null;
     routeCumDist = saved.routeCumDist || null;
+    completedRoutePoints = saved.completedRoutePoints || [];
     maxProgress = saved.maxProgress || 0;
     progressBase = saved.progressBase || 0;
 
@@ -1011,9 +1024,17 @@ function buildCumulativeDistances(points){
   return cum;
 }
 
+async function fetchWithTimeout(url, timeoutMs, options = {}){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try{
+    return await fetch(url, {...options, signal: controller.signal});
+  } finally { clearTimeout(timer); }
+}
+const ROUTE_FETCH_TIMEOUT_MS = 8000;
 async function fetchRouteFromMapbox(sLat, sLng, dLat, dLng){
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, ROUTE_FETCH_TIMEOUT_MS);
   if(!res.ok) throw new Error('Mapbox Directions HTTP ' + res.status);
   const data = await res.json();
   if(!data.routes || data.routes.length === 0) throw new Error('no road route');
@@ -1024,7 +1045,7 @@ async function fetchRouteFromMapbox(sLat, sLng, dLat, dLng){
 }
 async function fetchRouteFromOsrm(sLat, sLng, dLat, dLng){
   const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, ROUTE_FETCH_TIMEOUT_MS);
   if(!res.ok) throw new Error('OSRM HTTP ' + res.status);
   const data = await res.json();
   if(!data.routes || data.routes.length === 0) throw new Error('no road route');
@@ -1246,7 +1267,25 @@ function buildPathTiles(wrap, theme, count){
   poly.setAttribute('stroke-linejoin', 'round');
   poly.setAttribute('opacity', '0.9');
   svg.appendChild(poly);
+  // a second line on top, colored like a completed tile, revealed
+  // progressively (via stroke-dasharray) as the trip advances — so the
+  // traveled portion of the path reads as one continuous colored route
+  // instead of only the dots themselves changing color
+  const progressPoly = document.createElementNS(svgNS, 'polyline');
+  progressPoly.setAttribute('points', poly.getAttribute('points'));
+  progressPoly.setAttribute('fill', 'none');
+  progressPoly.setAttribute('stroke', theme.tileDone);
+  progressPoly.setAttribute('stroke-width', Math.max(2, size * 0.55));
+  progressPoly.setAttribute('stroke-linecap', 'round');
+  progressPoly.setAttribute('stroke-linejoin', 'round');
+  progressPoly.id = 'pathProgressLine';
+  svg.appendChild(progressPoly);
   wrap.appendChild(svg);
+  // dasharray/dashoffset needs the element in the DOM (for getTotalLength)
+  // and starts fully hidden — renderProgress() reveals it as trip progresses
+  const pathLen = progressPoly.getTotalLength ? progressPoly.getTotalLength() : 0;
+  progressPoly.style.strokeDasharray = pathLen;
+  progressPoly.style.strokeDashoffset = pathLen;
 
   centers.forEach((c, i) => {
     const tl = document.createElement('div');
@@ -1317,10 +1356,14 @@ function buildBoard(){
   buildDecor(theme);
   const wrap = $('roadWrap');
   wrap.innerHTML = '';
+  // +1: the finish tile is a dedicated extra tile beyond the user-configured
+  // count, not the last of the count tiles itself — see renderProgress for
+  // why (otherwise the car "parks" on a finish-looking tile for the whole
+  // final tile's worth of distance before really arriving).
   if(theme.layout === 'grid'){
-    buildGridTiles(wrap, theme, settings.tileCount);
+    buildGridTiles(wrap, theme, settings.tileCount + 1);
   } else {
-    buildPathTiles(wrap, theme, settings.tileCount);
+    buildPathTiles(wrap, theme, settings.tileCount + 1);
   }
 }
 
@@ -1357,9 +1400,15 @@ function renderProgress(fraction){
     buildBoard();
   }
 
-  const totalTiles = boardTileCount || count;
-  const filledTiles = Math.floor(fraction * totalTiles);
-  const currentTile = Math.min(totalTiles, filledTiles + 1);
+  const totalTiles = boardTileCount || (count + 1);
+  // the finish tile is a dedicated extra tile beyond the count route tiles
+  // (see buildBoard) — never reached by ordinary fraction math, only at
+  // true arrival, so it can't look like "arrived" while still 10km out on
+  // a long trip with few tiles.
+  const routeTiles = Math.max(1, totalTiles - 1);
+  const arrived = displayPercent >= 100;
+  const filledTiles = arrived ? routeTiles : Math.min(routeTiles, Math.floor(fraction * routeTiles));
+  const currentTile = arrived ? totalTiles : Math.min(routeTiles, filledTiles + 1);
   const carMinSize = Math.floor(160 / Math.sqrt(100)); // reference: size at 100 tiles
   const carSize = Math.max(carMinSize, Math.floor(160 / Math.sqrt(count)));
 
@@ -1380,6 +1429,17 @@ function renderProgress(fraction){
     car.style.fontSize = carSize + 'px';
     car.textContent = theme.vehicle;
     cur.appendChild(car);
+  }
+
+  // water/dino themes connect tiles with a line under them; reveal the
+  // completed portion of it in the same "done" color as the tiles, so the
+  // traveled path reads as one continuous colored route, not just dots
+  const pathLine = document.getElementById('pathProgressLine');
+  if(pathLine && pathLine.getTotalLength){
+    const len = pathLine.getTotalLength();
+    const revealFrac = arrived ? 1 : clamp(filledTiles / routeTiles, 0, 1);
+    pathLine.style.strokeDasharray = len;
+    pathLine.style.strokeDashoffset = len * (1 - revealFrac);
   }
 
   $('progressFill').style.width = (fraction*100) + '%';
@@ -1405,6 +1465,7 @@ function renderProgress(fraction){
   } else {
     msgEl.textContent = t('msgStart') + ' ' + theme.startIcon;
   }
+  updateRouteMapLineSplit();
   updateRouteMapCarPosition();
 }
 
@@ -1654,13 +1715,22 @@ function acceptProgressFromGps(pos){
   }
   fraction = clamp(fraction, 0, 1);
 
-  // don't let a single noisy fix near the end declare arrival — only accept
-  // fraction===1 once we're also physically close to the destination point
+  // don't let a single noisy fix near the end declare arrival — only jump
+  // to 100% once we're also physically close to the destination point.
+  // Rather than freezing at a flat ceiling the whole time we're "close but
+  // not quite there" (which reads as stuck, then teleports to 100% — this
+  // happens easily since a destination's coordinates are often a bit
+  // offset from the nearest road, e.g. a house set back from the street),
+  // smoothly raise the ceiling from 98% toward 99.9% as the real
+  // straight-line distance shrinks through the last ~500m, so the percent
+  // keeps visibly climbing right up until arrival is actually declared.
   if(fraction >= 0.98){
     const directDist = haversine(lat, lng, destLat, destLng);
-    const arrivalThreshold = Math.max(0.05, (accuracy || 30) / 1000 * 2);
+    const arrivalThreshold = Math.max(0.08, (accuracy || 30) / 1000 * 2);
     if(directDist > arrivalThreshold){
-      fraction = Math.min(fraction, 0.98);
+      const approachWindowKm = 0.5;
+      const proximity = clamp(1 - (directDist - arrivalThreshold) / approachWindowKm, 0, 1);
+      fraction = Math.min(fraction, 0.98 + proximity * 0.011);
     }
   }
 
@@ -1773,6 +1843,14 @@ async function recalcRouteFromCurrentPosition(lat, lng){
     progressBase = Math.max(maxProgress, distanceBasedProgress);
     maxProgress = progressBase;
     gpsState.lastAcceptedProgress = maxProgress;
+    // keep the geometry already driven on the OLD route before it gets
+    // replaced — otherwise the map would lose all trace of everything
+    // covered before this recalculation, showing only the new remaining
+    // route with nothing yet in green
+    if(usingRoute && routePoints && routePoints.length > 1){
+      const oldIdx = clamp(gpsState.lastAcceptedIndex || 0, 0, routePoints.length - 1);
+      completedRoutePoints = completedRoutePoints.concat(routePoints.slice(0, oldIdx + 1));
+    }
     routePoints = newRoute.points;
     routeCumDist = newRoute.cum;
     totalDistance = newRoute.totalKm;
@@ -1797,6 +1875,10 @@ async function recalcRouteFromCurrentPosition(lat, lng){
     progressBase = Math.max(maxProgress, distanceBasedProgress);
     maxProgress = progressBase;
     gpsState.lastAcceptedProgress = maxProgress;
+    if(usingRoute && routePoints && routePoints.length > 1){
+      const oldIdx = clamp(gpsState.lastAcceptedIndex || 0, 0, routePoints.length - 1);
+      completedRoutePoints = completedRoutePoints.concat(routePoints.slice(0, oldIdx + 1));
+    }
     usingRoute = false;
     routePoints = null;
     routeCumDist = null;
@@ -1857,14 +1939,14 @@ async function geocodeMapbox(query){
 }
 async function geocodeNominatim(query){
   const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&accept-language=' + settings.lang + '&q=' + encodeURIComponent(query);
-  const res = await fetch(url, {headers: {'Accept': 'application/json'}});
+  const res = await fetchWithTimeout(url, ROUTE_FETCH_TIMEOUT_MS, {headers: {'Accept': 'application/json'}});
   if(!res.ok) throw new Error('Nominatim HTTP ' + res.status);
   const data = await res.json();
   return data.map(r => ({ lat: r.lat, lon: r.lon, shortName: r.display_name.split(',')[0], fullName: r.display_name }));
 }
 async function geocodePhoton(query){
   const url = 'https://photon.komoot.io/api/?limit=5&lang=' + settings.lang + '&q=' + encodeURIComponent(query);
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, ROUTE_FETCH_TIMEOUT_MS);
   if(!res.ok) throw new Error('Photon HTTP ' + res.status);
   const data = await res.json();
   return (data.features || []).map(f => {
@@ -2124,6 +2206,7 @@ $('startBtn').addEventListener('click', async () => {
 
   routePoints = null;
   routeCumDist = null;
+  completedRoutePoints = [];
   usingRoute = false;
   routeMeta.segments = null;
   progressBase = 0;
@@ -2236,9 +2319,13 @@ function ensureRouteMap(){
 
 function renderRouteMap(fitBounds){
   if(!routeMap || destLat === undefined) return;
-  // startLat/startLng aren't persisted across a resumed trip, so fall back
-  // to the route's own first point, then to the last known GPS fix
-  const routeStart = (routePoints && routePoints[0]) ? {lat:routePoints[0][0], lng:routePoints[0][1]} : null;
+  // the true start point never moves — prefer it over routePoints[0], which
+  // is only the start of the CURRENT (possibly recalculated) route segment
+  // and drifts to wherever the last recalculation happened from, no longer
+  // marking where the trip actually began
+  const routeStart = (startLat !== undefined)
+    ? {lat:startLat, lng:startLng}
+    : ((routePoints && routePoints[0]) ? {lat:routePoints[0][0], lng:routePoints[0][1]} : null);
   const currentPos = gpsState.lastPosition || routeStart || (startLat !== undefined ? {lat:startLat, lng:startLng} : null);
   if(!currentPos) return; // nothing usable to draw yet
   const curLatLng = [currentPos.lat, currentPos.lng];
@@ -2246,24 +2333,27 @@ function renderRouteMap(fitBounds){
   let donePoints, todoPoints;
   if(usingRoute && routePoints && routePoints.length > 1){
     // split the route geometry at the segment we last matched to, so the
-    // covered part can be drawn in a different colour from what's left
+    // covered part can be drawn in a different colour from what's left.
+    // completedRoutePoints prepends whatever was already driven on any
+    // earlier (since-replaced) route from previous recalculations, so the
+    // green portion reflects the whole trip so far, not just this segment.
     const idx = clamp(gpsState.lastAcceptedIndex || 0, 0, routePoints.length - 2);
-    donePoints = routePoints.slice(0, idx + 1).concat([curLatLng]);
+    donePoints = completedRoutePoints.concat(routePoints.slice(0, idx + 1)).concat([curLatLng]);
     todoPoints = [curLatLng].concat(routePoints.slice(idx + 1));
   } else {
     const startPt = routeStart ? [routeStart.lat, routeStart.lng] : curLatLng;
-    donePoints = [startPt, curLatLng];
+    donePoints = completedRoutePoints.length ? completedRoutePoints.concat([curLatLng]) : [startPt, curLatLng];
     todoPoints = [curLatLng, [destLat, destLng]];
   }
 
   if(routeMapLineDone) routeMap.removeLayer(routeMapLineDone);
   if(routeMapLineTodo) routeMap.removeLayer(routeMapLineTodo);
   routeMapLineDone = L.polyline(donePoints, { color:'#3FAE6A', weight:5, opacity:.9 }).addTo(routeMap);
-  routeMapLineTodo = L.polyline(todoPoints, { color:'#FF6B5B', weight:5, opacity:.85 }).addTo(routeMap);
+  routeMapLineTodo = L.polyline(todoPoints, { color:'#2D6CDF', weight:5, opacity:.85 }).addTo(routeMap);
 
   const startPoint = routeStart || currentPos;
   if(!routeMapStartMarker){
-    routeMapStartMarker = L.circleMarker([startPoint.lat, startPoint.lng], { radius:7, color:'#fff', weight:2, fillColor:'#39B6E0', fillOpacity:1 }).addTo(routeMap);
+    routeMapStartMarker = L.circleMarker([startPoint.lat, startPoint.lng], { radius:8, color:'#fff', weight:2, fillColor:'#FFC93C', fillOpacity:1 }).addTo(routeMap);
   } else routeMapStartMarker.setLatLng([startPoint.lat, startPoint.lng]);
 
   if(!routeMapDestMarker){
@@ -2276,6 +2366,34 @@ function renderRouteMap(fitBounds){
     const bounds = routeMapLineDone.getBounds().extend(routeMapLineTodo.getBounds());
     routeMap.fitBounds(bounds, { padding:[24,24] });
   }
+}
+
+// keeps the traveled/remaining portions of the route line correctly
+// colored on every GPS tick. renderRouteMap() only runs on structural
+// changes (recalculation, view toggle, theme switch) — without this, the
+// line's green/orange split stayed frozen at whatever it was during normal
+// driving between those events, even though the car marker itself kept
+// moving every tick (see updateRouteMapCarPosition).
+function updateRouteMapLineSplit(){
+  if(!routeMap || !routeMapLineDone || !routeMapLineTodo || destLat === undefined) return;
+  const routeStart = (startLat !== undefined)
+    ? {lat:startLat, lng:startLng}
+    : ((routePoints && routePoints[0]) ? {lat:routePoints[0][0], lng:routePoints[0][1]} : null);
+  const currentPos = gpsState.lastPosition || routeStart || (startLat !== undefined ? {lat:startLat, lng:startLng} : null);
+  if(!currentPos) return;
+  const curLatLng = [currentPos.lat, currentPos.lng];
+  let donePoints, todoPoints;
+  if(usingRoute && routePoints && routePoints.length > 1){
+    const idx = clamp(gpsState.lastAcceptedIndex || 0, 0, routePoints.length - 2);
+    donePoints = completedRoutePoints.concat(routePoints.slice(0, idx + 1)).concat([curLatLng]);
+    todoPoints = [curLatLng].concat(routePoints.slice(idx + 1));
+  } else {
+    const startPt = routeStart ? [routeStart.lat, routeStart.lng] : curLatLng;
+    donePoints = completedRoutePoints.length ? completedRoutePoints.concat([curLatLng]) : [startPt, curLatLng];
+    todoPoints = [curLatLng, [destLat, destLng]];
+  }
+  routeMapLineDone.setLatLngs(donePoints);
+  routeMapLineTodo.setLatLngs(todoPoints);
 }
 
 // keeps the car marker on the driver's real GPS position — deliberately
@@ -2372,6 +2490,7 @@ $('resetBtn').addEventListener('click', () => {
   $('startSearchArea').classList.add('hidden');
   routePoints = null;
   routeCumDist = null;
+  completedRoutePoints = [];
   usingRoute = false;
   routeMeta.segments = null;
   progressBase = 0;
